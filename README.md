@@ -1,93 +1,171 @@
-# Task_12_Create_ASP.NET_Core_Blazor_UI
+# finance-management-blazor-ui
 
+Blazor WebAssembly Standalone UI for the [finance-management-api-cqrs](https://github.com/vaytekus/finance-management-api-cqrs) backend. Built on .NET 10 with MudBlazor.
 
+## Features
 
-## Getting started
+- **Blazor WebAssembly Standalone** — pure client-side WASM, no Blazor Server hosting
+- **JWT authentication (hybrid)** — access token in memory, refresh token in HttpOnly Secure cookie
+- **Silent refresh on startup** — restores session before first render via `TryRestoreSessionAsync`
+- **Silent refresh on 401** — `AuthDelegatingHandler` retries the request after refreshing the access token
+- **Auth pipeline** — custom `AuthenticationStateProvider` bridging in-memory token state to Blazor's `<CascadingAuthenticationState>` + `<AuthorizeRouteView>`
+- **Secure by default** — global `[Authorize]` via `_Imports.razor`, public pages opt in with `[AllowAnonymous]`
+- **Named `HttpClient`s** — `"Api"` (auth-aware, points at backend) and `"Local"` (no auth, for WASM static assets)
+- **Login page** — `EditForm` + `DataAnnotationsValidator`, snackbar feedback, open-redirect-safe `returnUrl` handling, show/hide password toggle
+- **Register page** — `EditForm` with client-side password confirmation validation, show/hide toggles for both password fields
+- **Empty layout for auth pages** — `EmptyLayout` bypasses `MudDrawer` on login/register screens
+- **Branded splash screen** — static HTML/CSS loader shown while WASM boots and silent refresh runs
+- **Wallets CRUD** — list (`MudTable`), create/edit form, delete confirmation dialog
+- **Operation Types CRUD** — list with color-coded `MudChip` for Income/Expense, create/edit form with enum-bound `MudSelect`
+- **Operations CRUD** — list with date/wallet/type filters, create/edit form, soft delete
+- **Reports** — daily and period reports with income/expense totals and per-type breakdown
+- **Profile page** — update username/email, change password (with current password verification), avatar initials in header update on save
+- **Users CRUD (admin)** — paginated user list, create/edit/delete, role management; accessible only to Admin role
+- **Reusable edit/create form pattern** — dual `@page` routes (`/edit` + `/edit/{id:guid}`), `OnParametersSetAsync` for load
+- **Show/hide password toggle** — on all password fields across Login, Register, Profile, UserCreateDialog, UserEditDialog
+- **`HttpResponseExtensions`** — `ReadRequiredAsync<T>` and `ReadOrNullAsync<T>` eliminate repeated `EnsureSuccessStatusCode + ReadFromJsonAsync` boilerplate
+- **`JwtClaimsParser`** — static class extracted from `AppAuthenticationStateProvider` (SRP)
+- **Enum-safe JSON** — shared `ApiJsonOptions` with `JsonStringEnumConverter`
+- **Shared Contracts** — request/response DTOs live in `FinanceManagement.Contracts` referenced by both API and UI
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## Stack
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+- .NET 10 / Blazor WebAssembly Standalone
+- **MudBlazor 9** — Material Design components (form, snackbar, layout, progress, table, dialog, menu)
+- `Microsoft.AspNetCore.Components.Authorization` — auth state + `AuthorizeRouteView`
+- `Microsoft.Extensions.Http` — `IHttpClientFactory` (typed + named clients)
+- `System.Net.Http.Json` — JSON helpers over `HttpClient`
+- Shared `FinanceManagement.Contracts` project (records + enums, no dependencies)
 
-## Add your files
+## Architecture
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+Standalone WASM app talking to the CQRS API. No hosting server — served as static assets, all logic runs in the browser.
 
 ```
-cd existing_repo
-git remote add origin https://git.foxminded.ua/foxstudent108992/task_12_create_asp.net_core_blazor_ui.git
-git branch -M main
-git push -uf origin main
+src/
+├── backend/                              # Reference copy of finance-management-api-cqrs
+│   ├── FinanceManagement.Domain/
+│   ├── FinanceManagement.Application/
+│   ├── FinanceManagement.Infrastructure/
+│   ├── FinanceManagement.Api/
+│   └── FinanceManagement.Functions/
+├── frontend/
+│   └── FinanceManagement.Web/            # Blazor WASM app
+│       ├── Common/                       # HttpResponseExtensions
+│       ├── Layout/                       # MainLayout, EmptyLayout, NavMenu, RedirectToLogin
+│       ├── Pages/
+│       │   ├── Login.razor
+│       │   ├── Register.razor
+│       │   ├── Profile.razor
+│       │   ├── Wallets/{List,Edit}.razor
+│       │   ├── OperationTypes/{List,Edit}.razor
+│       │   ├── Operations/{List,Edit}.razor
+│       │   └── Reports/Reports.razor
+│       ├── Services/
+│       │   ├── Auth/                     # AuthStateService, AppAuthenticationStateProvider,
+│       │   │                             #   AuthService, JwtClaimsParser,
+│       │   │                             #   IProfileService, ProfileService
+│       │   ├── Http/                     # AuthDelegatingHandler
+│       │   ├── Common/                   # ApiJsonOptions
+│       │   ├── Wallets/                  # IWalletService + WalletService
+│       │   ├── OperationTypes/           # IOperationTypeService + OperationTypeService
+│       │   ├── Operations/               # IOperationService + OperationService + OperationQuery
+│       │   ├── Reports/                  # IReportService + ReportService
+│       │   └── Users/                    # IUserService + UserService
+│       ├── Shared/                       # ConfirmDialog, UserCreateDialog, UserEditDialog
+│       ├── wwwroot/                      # index.html (splash), css/, appsettings.json
+│       ├── App.razor
+│       ├── Program.cs
+│       └── _Imports.razor
+└── shared/
+    └── FinanceManagement.Contracts/      # Auth/, Users/, Wallets/, Operations/, OperationTypes/, Reports/, Enums/, Common/
 ```
 
-## Integrate with your tools
+### Auth flow
 
-* [Set up project integrations](https://git.foxminded.ua/foxstudent108992/task_12_create_asp.net_core_blazor_ui/-/settings/integrations)
+1. On app boot `Program.cs` runs `AuthService.TryRestoreSessionAsync()` before `host.RunAsync()`.
+2. `AuthService` POSTs to `/api/auth/refresh` with `credentials: 'include'`. If the HttpOnly cookie has a valid refresh token, it gets a new access token; otherwise it silently fails.
+3. `AuthStateService` (singleton) stores the access token + expiry + user in memory and raises `OnChange`.
+4. `AppAuthenticationStateProvider` observes `AuthStateService.OnChange` and calls `NotifyAuthenticationStateChanged` → Blazor re-renders auth-aware components.
+5. `JwtClaimsParser` parses the JWT payload (base64 decode) into `ClaimsPrincipal` — extracted as a static class from `AppAuthenticationStateProvider`.
+6. Protected pages carry `[Authorize]` (via global `_Imports.razor`); unauthenticated hits render `<RedirectToLogin/>` and navigate to `/login?returnUrl=...`.
+7. Every outbound API request goes through `AuthDelegatingHandler`, which attaches `Authorization: Bearer <token>` and sets `BrowserRequestCredentials.Include`. On 401 it triggers a refresh and retries once (skipping `/api/auth/*` to avoid recursion).
 
-## Collaborate with your team
+### Profile feature
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- Route `/profile` renders two `MudPaper` cards side-by-side: **Profile Info** and **Change Password**.
+- Profile Info form pre-fills `UserName` and `Email` from `AuthStateService.User` on init; on save calls `ProfileService.UpdateProfileAsync` then `GetMeAsync` and updates `AuthStateService` so the header avatar initials refresh immediately.
+- Change Password form requires `CurrentPassword`, `NewPassword`, and `ConfirmPassword`; passwords must match client-side before the request is sent.
+- All password fields have show/hide eye icon toggles (`Adornment.End` with `VisibilityOff/Visibility` icons).
+- `IProfileService` / `ProfileService` hit `api/users/me` (GET, PUT) and `api/users/me/password` (PUT).
 
-## Test and Deploy
+### Users admin feature
 
-Use the built-in continuous integration in GitLab.
+- Route `/users` accessible only to Admin role (server-side `[Authorize(Roles = "Admin")]` + client-side route guard).
+- `MudTable` with server-side pagination; row actions: Edit (opens `UserEditDialog`), Delete (opens `ConfirmDialog`).
+- `UserCreateDialog` — create user with role selection and password field.
+- `UserEditDialog` — edit username/email/role; optionally reset password (leave blank to keep current).
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+### Wallets feature
 
-***
+- Route `/wallets` → `MudTable` bound to `IReadOnlyList<WalletResponse>`.
+- Row actions: **Edit** navigates to `/wallets/edit/{id}`, **Delete** opens `ConfirmDialog`.
+- `Pages/Wallets/Edit.razor` handles both create and edit via dual `@page` directives.
+- `MudSelect` bound to the `Currency` enum; `EditForm` + `DataAnnotationsValidator`.
 
-# Editing this README
+### Operation Types feature
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+- Route `/operation-types` → `MudTable` with Name, Kind, Description columns.
+- Kind rendered as color-coded `MudChip` (Income → `Color.Success`, Expense → `Color.Error`).
+- `MudSelect` bound to `OperationKind`; optional description trimmed to `null` when whitespace-only.
 
-## Suggestions for a good README
+### Operations feature
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+- Route `/operations` → `MudTable` with date, wallet, type, amount, note columns.
+- Filter bar: date range, wallet selector, operation type selector.
+- Soft delete — deleted operations are hidden from the list but retained in DB.
 
-## Name
-Choose a self-explaining name for your project.
+### Reports feature
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+- Route `/reports` → daily and period report modes.
+- Displays `TotalIncome`, `TotalExpense`, `TotalBalance`, and a per-type breakdown table.
+- Currency selector passed as a query param to the API.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+## Run
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+The UI needs the CQRS backend running. Clone and start [finance-management-api-cqrs](https://github.com/vaytekus/finance-management-api-cqrs) first.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+Then in this repo:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```bash
+cd src/frontend/FinanceManagement.Web
+dotnet run --launch-profile https
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Open `https://localhost:5101` in a browser.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Default admin credentials (seeded by the backend): `admin` / `admin`.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+### API base URL
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Configured in `src/frontend/FinanceManagement.Web/wwwroot/appsettings.json`:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```json
+{ "ApiBaseUrl": "https://localhost:5001" }
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### CORS
 
-## License
-For open source projects, say how it is licensed.
+The backend must allow the WASM origin with credentials. In the API's `Program.cs` the CORS policy allows `https://localhost:5101` and calls `AllowCredentials()` — a wildcard origin will not work because the browser blocks credentialed requests to `*`.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## Tests
+
+```bash
+# Unit tests
+dotnet test tests/FinanceManagement.Tests
+
+# Integration tests (requires Docker for PostgreSQL via Testcontainers)
+dotnet test tests/FinanceManagement.IntegrationTests
+```
+
+45 tests total: 7 unit, 38 integration.

@@ -1,0 +1,135 @@
+@page "/wallets"
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.Wallets
+@using FinanceManagement.Web.Services.Wallets
+@using FinanceManagement.Web.Shared
+@inject IWalletService WalletService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Wallets | Finance Management</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Wallets</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="() => OpenFormAsync()">
+        Create
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_wallets"
+              Dense="true"
+              Hover="true"
+              Bordered="false"
+              Striped="true"
+              Elevation="1">
+        <HeaderContent>
+            <MudTh>Name</MudTh>
+            <MudTh>Currency</MudTh>
+            <MudTh>Created</MudTh>
+            <MudTh Style="width: 120px; text-align: right;">Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <MudTd DataLabel="Currency">@context.Currency</MudTd>
+            <MudTd DataLabel="Created">@context.CreatedAt.ToLocalTime().ToString("g")</MudTd>
+            <MudTd DataLabel="Actions" Style="text-align: right;">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               Color="Color.Primary"
+                               OnClick="() => OpenFormAsync(context.Id)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="() => DeleteAsync(context)" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No wallets yet. Click Create to add one.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<WalletResponse> _wallets = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _wallets = await WalletService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load wallets: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenFormAsync(Guid? id = null)
+    {
+        var parameters = new DialogParameters<WalletFormDialog>
+        {
+            {
+                x => x.Id, id
+            }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small, FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<WalletFormDialog>(
+            id.HasValue ? "Edit Wallet" : "Create Wallet",
+            parameters,
+            options);
+
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(WalletResponse wallet)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            title: "Delete wallet",
+            markupMessage: new MarkupString($"Are you sure you want to delete <b>{wallet.Name}</b>?"),
+            yesText: "Delete",
+            cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        try
+        {
+            await WalletService.DeleteAsync(wallet.Id);
+            Snackbar.Add($"Wallet '{wallet.Name}' deleted", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to delete: {ex.Message}", Severity.Error);
+        }
+    }
+}

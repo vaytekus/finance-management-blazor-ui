@@ -1,0 +1,240 @@
+@using FinanceManagement.Contracts.Operations
+@using FinanceManagement.Contracts.Wallets
+@using FinanceManagement.Contracts.OperationTypes
+@using FinanceManagement.Web.Services.Operations
+@using FinanceManagement.Web.Services.Wallets
+@using FinanceManagement.Web.Services.OperationTypes
+@using FinanceManagement.Contracts.Enums
+@inject IOperationService OperationService
+@inject IWalletService WalletService
+@inject IOperationTypeService OperationTypeService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudForm @ref="_form" Model="_model">
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid?"
+                                   @bind-Value="_model.TypeId"
+                                   Label="Type"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   RequiredError="Type is required">
+                            @foreach (var t in _types)
+                            {
+                                <MudSelectItem T="Guid?" Value="@t.Id">@t.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Guid?"
+                                   Value="@_model.WalletId"
+                                   ValueChanged="OnWalletChanged"
+                                   Label="Wallet"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   RequiredError="Wallet is required">
+                            @foreach (var w in _wallets)
+                            {
+                                <MudSelectItem T="Guid?" Value="@w.Id">@w.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="Currency?"
+                                   @bind-Value="_model.Currency"
+                                   Label="Currency"
+                                   Variant="Variant.Outlined">
+                            @foreach (var c in Enum.GetValues<Currency>())
+                            {
+                                <MudSelectItem T="Currency?" Value="@((Currency?)c)">@c</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudNumericField T="decimal?"
+                                         @bind-Value="_model.Amount"
+                                         Label="Amount"
+                                         Variant="Variant.Outlined"
+                                         Required="true"
+                                         RequiredError="Amount is required"
+                                         Validation="@(new Func<decimal?, string?>(ValidateAmount))" />
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker @bind-Date="_model.Date"
+                                       Label="Date"
+                                       Variant="Variant.Outlined"
+                                       Required="true"
+                                       RequiredError="Date is required" />
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.Note"
+                                      Label="Note"
+                                      Variant="Variant.Outlined"
+                                      Lines="2" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+                    <MudButton Variant="Variant.Text" OnClick="Cancel">Cancel</MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_saving"
+                               OnClick="SaveAsync">
+                        @(_saving ? "Saving..." : (IsEdit ? "Save" : "Create"))
+                    </MudButton>
+                </MudStack>
+            </MudForm>
+        }
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private MudForm _form = default!;
+    private OperationFormModel _model = new();
+    private IReadOnlyList<WalletResponse> _wallets = [];
+    private IReadOnlyList<OperationTypeResponse> _types = [];
+    private bool _loading = true;
+    private bool _saving;
+
+    private bool IsEdit => Id.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var walletTask = WalletService.GetAllAsync();
+            var typesTask = OperationTypeService.GetAllAsync();
+            await Task.WhenAll(walletTask, typesTask);
+            _wallets = await walletTask;
+            _types = await typesTask;
+
+            if (IsEdit)
+            {
+                var op = await OperationService.GetByIdAsync(Id!.Value);
+
+                if (op is null)
+                {
+                    Snackbar.Add("Operation not found.", Severity.Warning);
+                    MudDialog.Cancel();
+                    return;
+                }
+
+                _model = new OperationFormModel
+                {
+                    TypeId = op.TypeId,
+                    WalletId = op.WalletId,
+                    Amount = op.Amount,
+                    Date = op.Date.ToLocalTime(),
+                    Note = op.Note,
+                    Currency = op.Currency
+                };
+            }
+            else
+            {
+                _model.Date = DateTime.Now;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load: {ex.Message}", Severity.Error);
+            MudDialog.Cancel();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string? ValidateAmount(decimal? value)
+    {
+        if (value.HasValue && value.Value <= 0)
+            return "Amount must be greater than 0";
+        return null;
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid) return;
+
+        _saving = true;
+        try
+        {
+            var date = _model.Date!.Value.ToUniversalTime();
+
+            if (IsEdit)
+            {
+                await OperationService.UpdateAsync(Id!.Value, new UpdateOperationRequest
+                {
+                    TypeId = _model.TypeId!.Value,
+                    WalletId = _model.WalletId!.Value,
+                    Amount = _model.Amount!.Value,
+                    Date = date,
+                    Note = _model.Note,
+                    Currency = _model.Currency
+                });
+                Snackbar.Add("Operation updated", Severity.Success);
+            }
+            else
+            {
+                await OperationService.CreateAsync(new CreateOperationRequest
+                {
+                    TypeId = _model.TypeId!.Value,
+                    WalletId = _model.WalletId!.Value,
+                    Amount = _model.Amount!.Value,
+                    Date = date,
+                    Note = _model.Note,
+                    Currency = _model.Currency
+                });
+                Snackbar.Add("Operation created", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to save: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void OnWalletChanged(Guid? walletId)
+    {
+        _model.WalletId = walletId;
+        var wallet = _wallets.FirstOrDefault(w => w.Id == walletId);
+        if (wallet is not null)
+            _model.Currency = wallet.Currency;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private class OperationFormModel
+    {
+        public Guid? TypeId { get; set; }
+        public Guid? WalletId { get; set; }
+        public decimal? Amount { get; set; }
+        public DateTime? Date { get; set; }
+        public string? Note { get; set; }
+        public Currency? Currency { get; set; }
+    }
+}

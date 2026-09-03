@@ -1,0 +1,98 @@
+﻿@page "/"
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.Reports
+@using FinanceManagement.Contracts.Operations
+@using FinanceManagement.Web.Services.Operations
+@using FinanceManagement.Web.Services.Reports
+@inject IReportService ReportService
+@inject IOperationService OperationService
+@inject ISnackbar Snackbar
+
+<PageTitle>Home | Finance Management</PageTitle>
+<MudText Typo="Typo.h5" Class="mb-4">Dashboard</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Income (this month)</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Success">@_report?.TotalIncome.ToString("N2")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Expense (this month)</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Error">@_report?.TotalExpense.ToString("N2")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Balance (this month)</MudText>
+                <MudText Typo="Typo.h5" Color="@(_report?.TotalBalance >= 0 ? Color.Success : Color.Error)">
+                    @_report?.TotalBalance.ToString("N2")
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Last 5 Operations</MudText>
+
+    <MudTable Items="_operations" Dense="true" Hover="true" Striped="true" Elevation="1">
+        <HeaderContent>
+            <MudTh>Date</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Amount</MudTh>
+            <MudTh>Note</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Date.ToLocalTime().ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>@context.TypeName</MudTd>
+            <MudTd>@context.Amount.ToString("N2") @context.Currency</MudTd>
+            <MudTd>@(context.Note ?? "—")</MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <MudText>No operations yet.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code
+{
+    private ReportResponse? _report;
+    private IReadOnlyList<OperationResponse> _operations = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var now = DateTime.Now;
+            var from = new DateTime(now.Year, now.Month, 1);
+            var to = now;
+
+            var reportTask = ReportService.GetPeriodAsync(from, to, Currency.UAH);
+            var optTask = OperationService.GetAsync(new OperationQuery
+            {
+                Page = 1, PageSize = 5, SortBy = "date", SortDescending = true
+            });
+
+            await Task.WhenAll(reportTask, optTask);
+
+            _report = await reportTask;
+            _operations = (await optTask).Items;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

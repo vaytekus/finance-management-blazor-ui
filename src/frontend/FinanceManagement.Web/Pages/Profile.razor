@@ -1,0 +1,167 @@
+@page "/profile"
+@attribute [Authorize]
+@inject IProfileService ProfileService
+@inject AuthStateService AuthState
+@inject ISnackbar Snackbar
+@using FinanceManagement.Contracts.Users
+@using FinanceManagement.Web.Services.Auth
+
+<MudText Typo="Typo.h5" Class="mb-4">Profile</MudText>
+
+<MudGrid>
+    <MudItem xs="12" sm="6">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Profile Info</MudText>
+            <MudForm @ref="_profileForm">
+                <MudTextField @bind-Value="_profileModel.UserName"
+                              Label="Username"
+                              Required="true"
+                              RequiredError="Username is required"
+                              Class="mb-3"/>
+                <MudTextField @bind-Value="_profileModel.Email"
+                              Label="Email"
+                              InputType="InputType.Email"
+                              Required="true"
+                              RequiredError="Email is required"
+                              Class="mb-3"/>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="SaveProfileAsync"
+                           Disabled="_savingProfile">
+                    @if (_savingProfile)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                    }
+                    Save
+                </MudButton>
+            </MudForm>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" sm="6">
+        <MudPaper Class="pa-4">
+            <MudText Typo="Typo.h6" Class="mb-3">Change Password</MudText>
+            <MudForm @ref="_passwordForm">
+                <MudTextField @bind-Value="_passwordModel.CurrentPassword"
+                              Label="Current Password"
+                              InputType="@(_showCurrent ? InputType.Text : InputType.Password)"
+                              Required="true"
+                              RequiredError="Current password is required"
+                              Class="mb-3"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showCurrent ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@(() => _showCurrent = !_showCurrent)"/>
+                <MudTextField @bind-Value="_passwordModel.NewPassword"
+                              Label="New Password"
+                              InputType="@(_showNew ? InputType.Text : InputType.Password)"
+                              Required="true"
+                              RequiredError="New password is required"
+                              Class="mb-3"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showNew ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@(() => _showNew = !_showNew)"/>
+                <MudTextField @bind-Value="_confirmPassword"
+                              Label="Confirm New Password"
+                              InputType="@(_showConfirm ? InputType.Text : InputType.Password)"
+                              Required="true"
+                              RequiredError="Please confirm new password"
+                              Class="mb-3"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showConfirm ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@(() => _showConfirm = !_showConfirm)"/>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="ChangePasswordAsync"
+                           Disabled="_changingPassword">
+                    @if (_changingPassword)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                    }
+                    Change Password
+                </MudButton>
+            </MudForm>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private MudForm? _profileForm;
+    private MudForm? _passwordForm;
+
+    private UpdateUserProfileRequest _profileModel = new();
+    private ChangePasswordRequest _passwordModel = new();
+    private string _confirmPassword = string.Empty;
+
+    private bool _savingProfile;
+    private bool _changingPassword;
+    private bool _showCurrent;
+    private bool _showNew;
+    private bool _showConfirm;
+
+    protected override void OnInitialized()
+    {
+        _profileModel.UserName = AuthState.User?.UserName ?? string.Empty;
+        _profileModel.Email = AuthState.User?.Email ?? string.Empty;
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        await _profileForm!.ValidateAsync();
+        if (!_profileForm.IsValid)
+        {
+            return;
+        }
+
+        _savingProfile = true;
+        try
+        {
+            await ProfileService.UpdateProfileAsync(_profileModel);
+            var updated = await ProfileService.GetMeAsync();
+            AuthState.UpdateUser(updated);
+            Snackbar.Add("Profile updated", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _savingProfile = false;
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        await _passwordForm!.ValidateAsync();
+        if (!_passwordForm.IsValid)
+        {
+            return;
+        }
+
+        if (_passwordModel.NewPassword != _confirmPassword)
+        {
+            Snackbar.Add("Passwords do not match", Severity.Warning);
+            return;
+        }
+
+        _changingPassword = true;
+        try
+        {
+            await ProfileService.ChangePasswordAsync(_passwordModel);
+            _passwordModel = new();
+            _confirmPassword = string.Empty;
+            _showCurrent = false;
+            _showNew = false;
+            _showConfirm = false;
+            Snackbar.Add("Password changed", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _changingPassword = false;
+        }
+    }
+}

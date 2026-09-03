@@ -1,0 +1,152 @@
+@using System.ComponentModel.DataAnnotations
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.Wallets
+@using FinanceManagement.Web.Services.Wallets
+@inject IWalletService WalletService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <EditForm Model="_model" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator />
+
+                <MudTextField @bind-Value="_model.Name"
+                              For="@(() => _model.Name)"
+                              Label="Name"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="mb-3" />
+
+                <MudSelect @bind-Value="_model.Currency"
+                           For="@(() => _model.Currency)"
+                           Label="Currency"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="mb-3">
+                    @foreach (var currency in Enum.GetValues<Currency>())
+                    {
+                        <MudSelectItem Value="currency">@currency</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+                    <MudButton Variant="Variant.Text"
+                               OnClick="Cancel"
+                               Disabled="_saving">Cancel</MudButton>
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_saving">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        @(IsEdit ? "Save" : "Create")
+                    </MudButton>
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private WalletFormModel _model = new ();
+    private bool _loading;
+    private bool _saving;
+
+    private bool IsEdit => Id.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsEdit)
+        {
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            var wallet = await WalletService.GetByIdAsync(Id!.Value);
+
+            if (wallet is null)
+            {
+                Snackbar.Add("Wallet not found.", Severity.Warning);
+                MudDialog.Cancel();
+                return;
+            }
+
+            _model = new WalletFormModel
+            {
+                Name = wallet.Name, Currency = wallet.Currency
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load: {ex.Message}", Severity.Error);
+            MudDialog.Cancel();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            if (IsEdit)
+            {
+                await WalletService.UpdateAsync(Id!.Value, new UpdateWalletRequest
+                {
+                    Name = _model.Name,
+                    Currency = _model.Currency
+                });
+                Snackbar.Add("Wallet updated", Severity.Success);
+            }
+            else
+            {
+                await WalletService.CreateAsync(new CreateWalletRequest
+                {
+                    Name = _model.Name,
+                    Currency = _model.Currency
+                });
+                Snackbar.Add("Wallet created", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Save failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private class WalletFormModel
+    {
+        [Required(ErrorMessage = "Name is required")]
+        [StringLength(100, ErrorMessage = "Name must be at most 100 characters")]
+        public string Name { get; set; } = "";
+
+        public Currency Currency { get; set; } = Currency.UAH;
+    }
+}

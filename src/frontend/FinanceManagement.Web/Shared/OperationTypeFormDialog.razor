@@ -1,0 +1,164 @@
+@using System.ComponentModel.DataAnnotations
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.OperationTypes
+@using FinanceManagement.Web.Services.OperationTypes
+@inject IOperationTypeService OperationTypeService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+        }
+        else
+        {
+            <EditForm Model="_model" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator/>
+
+                <MudTextField @bind-Value="_model.Name"
+                              For="@(() => _model.Name)"
+                              Label="Name"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="mb-3"/>
+
+                <MudSelect @bind-Value="_model.Kind"
+                           For="@(() => _model.Kind)"
+                           Label="Kind"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Disabled="@IsEdit"
+                           Class="mb-3">
+                    @foreach (var kind in Enum.GetValues<OperationKind>())
+                    {
+                        <MudSelectItem Value="kind">@kind</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <MudTextField @bind-Value="_model.Description"
+                              For="@(() => _model.Description)"
+                              Label="Description (optional)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Lines="3"
+                              Class="mb-3"/>
+
+                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+                    <MudButton Variant="Variant.Text"
+                               OnClick="Cancel"
+                               Disabled="_saving">Cancel</MudButton>
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Disabled="_saving">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                        }
+                        @(IsEdit ? "Save" : "Create")
+                    </MudButton>
+                </MudStack>
+            </EditForm>
+        }
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private OperationTypeFormModel _model = new();
+
+    private bool _loading;
+    private bool _saving;
+    private bool IsEdit => Id.HasValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsEdit)
+        {
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            var type = await OperationTypeService.GetByIdAsync(Id!.Value);
+
+            if (type is null)
+            {
+                Snackbar.Add("Operation type not found.", Severity.Warning);
+                MudDialog.Cancel();
+                return;
+            }
+
+            _model = new OperationTypeFormModel
+            {
+                Name = type.Name, Description = type.Description, Kind = type.Kind
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load: {ex.Message}", Severity.Error);
+            MudDialog.Cancel();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            if (IsEdit)
+            {
+                await OperationTypeService.UpdateAsync(Id!.Value, new UpdateOperationTypeRequest
+                {
+                    Name = _model.Name, Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description, Kind = _model.Kind
+                });
+
+                Snackbar.Add("Operation type updated", Severity.Success);
+            }
+            else
+            {
+                await OperationTypeService.CreateAsync(new CreateOperationTypeRequest
+                {
+                    Name = _model.Name, Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description, Kind = _model.Kind
+                });
+
+                Snackbar.Add("Operation type created", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Save failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private class OperationTypeFormModel
+    {
+        [Required(ErrorMessage = "Name is required")]
+        [StringLength(100, ErrorMessage = "Name must be at most 100 characters")]
+        public string Name { get; set; } = "";
+
+        [StringLength(500, ErrorMessage = "Description must be at most 500 characters")]
+        public string? Description { get; set; }
+
+        public OperationKind Kind { get; set; } = OperationKind.Expense;
+    }
+}

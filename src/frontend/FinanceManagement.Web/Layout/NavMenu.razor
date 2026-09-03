@@ -1,0 +1,23 @@
+﻿<MudNavMenu>
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+        Home
+    </MudNavLink>
+    <MudNavLink Href="wallets" Icon="@Icons.Material.Filled.AccountBalanceWallet">
+        Wallets
+    </MudNavLink>
+    <MudNavLink Href="operation-types" Icon="@Icons.Material.Filled.Category">
+        Operation Types
+    </MudNavLink>
+    <MudNavLink Href="operations" Icon="@Icons.Material.Filled.SwapHoriz">
+        Operations
+    </MudNavLink>
+    <MudNavLink Href="reports" Icon="@Icons.Material.Filled.Assessment">
+        Reports
+    </MudNavLink>
+    <AuthorizeView Roles="Admin">
+        <MudDivider Class="my-2"/>
+        <MudNavLink Href="users" Icon="@Icons.Material.Filled.People">
+            Users
+        </MudNavLink>
+    </AuthorizeView>
+</MudNavMenu>

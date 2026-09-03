@@ -1,0 +1,193 @@
+@page "/operation-types"
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.OperationTypes
+@using FinanceManagement.Web.Services.OperationTypes
+@using FinanceManagement.Web.Shared
+@inject IOperationTypeService OperationTypeService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Operation Types | Finance Management</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Operation Types</MudText>
+    <MudSpacer/>
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="() => OpenFormAsync()">
+        Create
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true"></MudProgressLinear>
+}
+else
+{
+    <MudTable Items="_types"
+              Dense="true"
+              Hover="true"
+              Bordered="false"
+              Striped="true"
+              Elevation="1">
+        <HeaderContent>
+            <MudTh>Name</MudTh>
+            <MudTh>Kind</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh Style="width: 120px; text-align: right;">Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Name">@context.Name</MudTd>
+            <MudTd DataLabel="Kind">
+                <MudChip T="string"
+                         Size="Size.Small"
+                         Color="@(context.Kind == OperationKind.Income ? Color.Success : Color.Error)"
+                         Variant="Variant.Text">
+                    @context.Kind
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Description">@(context.Description ?? "—")</MudTd>
+            <MudTd DataLabel="Actions" Style="text-align: right;">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Size="Size.Small"
+                               Color="Color.Primary"
+                               OnClick="() => OpenFormAsync(context.Id)"/>
+                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                               Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="() => DeleteAsync(context)"/>
+            </MudTd>
+        </RowTemplate>
+
+        <NoRecordsContent>
+            <MudText>No operation types yet. Click Create to add one.</MudText>
+        </NoRecordsContent>
+    </MudTable>
+}
+
+@code {
+    private IReadOnlyList<OperationTypeResponse> _types = [];
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            _types = await OperationTypeService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load operation types: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenFormAsync(Guid? id = null)
+    {
+        var parameters = new DialogParameters<OperationTypeFormDialog>
+        {
+            {
+                x => x.Id, id
+            }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small, FullWidth = true
+        };
+        var dialog = await DialogService.ShowAsync<OperationTypeFormDialog>(
+            id.HasValue ? "Edit opearation type" : "Create Opearation Type",
+            parameters,
+            options);
+
+        var result = await dialog.Result;
+
+        if(result is {Canceled: false})
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(OperationTypeResponse type)
+    {
+        int count;
+        try
+        {
+            count = await OperationTypeService.CountOperationsAsync(type.Id);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to check usage: {ex.Message}", Severity.Error);
+            return;
+        }
+
+        DeleteOperationTypeRequest? body = null!;
+
+        if (count == 0)
+        {
+            var confirmed = await DialogService.ShowMessageBoxAsync(
+                title: "Delete operation type",
+                markupMessage: new MarkupString($"Are you sure you want to delete <b>{type.Name}</b>?"),
+                yesText: "Delete",
+                cancelText: "Cancel");
+
+            if (confirmed != true)
+            {
+                return;
+            }
+        }
+        else
+        {
+            var availableTypes = _types
+                .Where(t => t.Kind == type.Kind && t.Id != type.Id)
+                .ToList();
+
+            var parameters = new DialogParameters<DeleteTypeWithReplacementDialog>
+            {
+                {
+                    x => x.TypeName, type.Name
+                },
+                {
+                    x => x.OperationCount, count
+                },
+                {
+                    x => x.AvailableTypes, availableTypes
+                },
+            };
+
+            var dialog = await DialogService.ShowAsync<DeleteTypeWithReplacementDialog>("Delete operation type", parameters);
+            var result = await dialog.Result;
+
+            if (result is null || result.Canceled)
+            {
+                return;
+            }
+
+            body = (DeleteOperationTypeRequest)result.Data!;
+        }
+
+        try
+        {
+            await OperationTypeService.DeleteAsync(type.Id, body);
+            Snackbar.Add($"Operation type '{type.Name}' deleted", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to delete: {ex.Message}", Severity.Error);
+        }
+    }
+}

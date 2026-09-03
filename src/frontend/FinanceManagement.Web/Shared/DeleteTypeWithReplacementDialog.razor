@@ -1,0 +1,81 @@
+@using FinanceManagement.Contracts.OperationTypes
+@using FinanceManagement.Contracts.Common
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-4">
+            Type <strong>@TypeName</strong> is used in @OperationCount operation(s).
+            Choose a replacement:
+        </MudText>
+
+        <MudRadioGroup @bind-Value="_mode">
+            <MudRadio Value="ReplacementMode.Existing" Color="Color.Primary">Select existing type</MudRadio>
+            <MudRadio Value="ReplacementMode.New" Color="Color.Primary">Create new type</MudRadio>
+        </MudRadioGroup>
+
+        @if (_mode == ReplacementMode.Existing)
+        {
+            <MudSelect T="Guid?" @bind-Value="_selectedId"
+                       Label="Replacement type"
+                       Class="mt-3"
+                       Disabled="@(!AvailableTypes.Any())">
+                @foreach (var t in AvailableTypes)
+                {
+                    <MudSelectItem T="Guid?" Value="@t.Id">@t.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (!AvailableTypes.Any())
+            {
+                <MudText Color="Color.Warning" Class="mt-2">
+                    No other types of the same kind. Create a new one first.
+                </MudText>
+            }
+        }
+        else
+        {
+            <MudTextField @bind-Value="_newName"
+                          Label="New type name"
+                          Class="mt-3"
+                          Immediate="true"/>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Error"
+                   Variant="Variant.Filled"
+                   Disabled="@(!CanConfirm)"
+                   OnClick="Confirm">Delete</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public string TypeName { get; set; } = string.Empty;
+    [Parameter] public int OperationCount { get; set; }
+
+    [Parameter] public IReadOnlyList<OperationTypeResponse> AvailableTypes { get; set; } = [];
+
+    private enum ReplacementMode {Existing, New}
+
+    private ReplacementMode _mode = ReplacementMode.Existing;
+    private Guid? _selectedId;
+    private string _newName = string.Empty;
+
+    private bool CanConfirm => _mode == ReplacementMode.Existing
+        ? _selectedId.HasValue
+        : !string.IsNullOrWhiteSpace(_newName);
+
+
+    private void Confirm()
+    {
+        var result = _mode == ReplacementMode.Existing
+            ? new DeleteOperationTypeRequest(_selectedId, null)
+            : new DeleteOperationTypeRequest(null, _newName.Trim());
+
+        MudDialog.Close(DialogResult.Ok(result));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,179 @@
+@page "/operation-types/edit"
+@page "/operation-types/edit/{id:guid}"
+@using System.ComponentModel.DataAnnotations
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.OperationTypes
+@using FinanceManagement.Web.Services.OperationTypes
+@inject IOperationTypeService OperationTypeService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(IsEdit ? "Edit Operation Type" : "Create Operation Type") | Finance Management</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+        OnClick="Cancel"
+        Color="Color.Default" />
+    <MudText Typo="Typo.h4">@(IsEdit ? "Edit Operation Type" : "Create Operation Type")</MudText>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_notFound)
+{
+    <MudAlert Severity="Severity.Warning">Operation type not found.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-6" Elevation="1">
+        <EditForm Model="_model" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_model.Name"
+                For="@(() => _model.Name)"
+                Label="Name"
+                Variant="Variant.Outlined"
+                Margin="Margin.Dense"
+                Class="mb-3" />
+
+            <MudSelect @bind-Value="_model.Kind"
+                For="@(() => _model.Kind)"
+                Label="Kind"
+                Variant="Variant.Outlined"
+                Margin="Margin.Dense"
+                Class="mb-3">
+                @foreach (var kind in Enum.GetValues<OperationKind>())
+                {
+                    <MudSelectItem Value="kind">@kind</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudTextField @bind-Value="_model.Description"
+                For="@(() => _model.Description)"
+                Label="Description (optional)"
+                Variant="Variant.Outlined"
+                Margin="Margin.Dense"
+                Lines="3"
+                Class="mb-3" />
+
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+                <MudButton Variant="Variant.Text"
+                    OnClick="Cancel"
+                    Disabled="_saving">
+                Cancel
+                </MudButton>
+                <MudButton ButtonType="ButtonType.Submit"
+                    Variant="Variant.Filled"
+                    Color="Color.Primary"
+                    Disabled="_saving">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    @(IsEdit ? "Save" : "Create")
+                </MudButton>
+            </MudStack>
+        </EditForm>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private OperationTypeModel _model = new();
+    private bool _loading;
+    private bool _saving;
+    private bool _notFound;
+
+    private bool IsEdit => Id.HasValue;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsEdit)
+        {
+            _loading = true;
+            _notFound = false;
+
+            try
+            {
+                var type = await OperationTypeService.GetByIdAsync(Id!.Value);
+
+                if (type is null)
+                {
+                    _notFound = true;
+                }
+                else
+                {
+                    _model = new OperationTypeModel
+                    {
+                        Name = type.Name, Description = type.Description, Kind = type.Kind
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Failed to load operation type: {ex.Message}", Severity.Error);
+                _notFound = true;
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+        else
+        {
+            _model = new OperationTypeModel();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            if (IsEdit)
+            {
+                await OperationTypeService.UpdateAsync(Id!.Value, new UpdateOperationTypeRequest
+                {
+                    Name = _model.Name, Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description, Kind = _model.Kind
+                });
+                Snackbar.Add("Operation type updated", Severity.Success);
+            }
+            else
+            {
+                await OperationTypeService.CreateAsync(new CreateOperationTypeRequest
+                {
+                    Name = _model.Name, Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description, Kind = _model.Kind
+                });
+                Snackbar.Add("Operation type created", Severity.Success);
+            }
+
+            Navigation.NavigateTo("/operation-types");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Save failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Cancel() => Navigation.NavigateTo("/operation-types");
+
+    private class OperationTypeModel
+    {
+        [Required(ErrorMessage = "Name is required")]
+        [StringLength(100, ErrorMessage = "Name must be at most 100 characters")]
+        public string Name { get; set; } = "";
+
+        [StringLength(500, ErrorMessage = "Description must be at most 500 characters")]
+        public string? Description { get; set; }
+
+        public OperationKind Kind { get; set; } = OperationKind.Expense;
+    }
+}

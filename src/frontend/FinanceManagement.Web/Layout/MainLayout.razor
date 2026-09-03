@@ -1,0 +1,108 @@
+﻿@inherits LayoutComponentBase
+
+@implements IDisposable
+@inject AuthStateService AuthState
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+
+<MudThemeProvider @bind-IsDarkMode="_isDarkMode" Theme="_theme" />                                                                                               
+<MudPopoverProvider />
+<MudDialogProvider />                                                                                                                                            
+<MudSnackbarProvider />
+
+<MudLayout>                                                                                                                                                      
+  <MudAppBar Elevation="1">
+    <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                   Color="Color.Inherit"
+                   Edge="Edge.Start"
+                   OnClick="ToggleDrawer" />
+    <MudText Typo="Typo.h5" Class="ml-3">Finance Management</MudText>
+    <MudSpacer />
+    <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
+                   Color="Color.Inherit"
+                   OnClick="ToggleDarkMode" />
+
+    <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" PopoverClass="mud-elevation-8" Class="ml-2">
+      <ActivatorContent>
+        <span @onclick="@context.ToggleAsync" style="cursor: pointer;">
+          <MudAvatar Color="Color.Secondary" Size="Size.Medium" Style="cursor: pointer;">
+            @UserInitial
+          </MudAvatar>
+        </span>
+      </ActivatorContent>
+      <ChildContent>
+        <div class="px-4 py-2">
+          <MudText Typo="Typo.subtitle2">@UserName</MudText>
+          <MudText Typo="Typo.caption" Color="Color.Secondary">@UserRole</MudText>
+        </div>
+        <MudDivider/>
+        <MudMenuItem Icon="@Icons.Material.Filled.Person" Href="/profile">
+          Profile
+        </MudMenuItem>
+        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="LogoutAsync">
+          Logout
+        </MudMenuItem>
+      </ChildContent>
+    </MudMenu>
+
+  </MudAppBar>
+
+  <MudDrawer @bind-Open="_drawerOpen"
+             ClipMode="DrawerClipMode.Always"
+             Elevation="1"
+             Variant="DrawerVariant.Responsive">
+    <NavMenu/>
+  </MudDrawer>
+
+  <MudMainContent>
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+      <ErrorBoundary @ref="_errorBoundary">
+        <ChildContent>
+          @Body
+        </ChildContent>
+        <ErrorContent>
+          <MudAlert Severity="Severity.Error" Class="ma-4">
+            An unexpected error occurred.
+            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="@(() => _errorBoundary?.Recover())">
+              Try again
+            </MudButton>
+          </MudAlert>
+        </ErrorContent>
+      </ErrorBoundary>
+    </MudContainer>
+  </MudMainContent>
+</MudLayout>
+
+@code {
+  private bool _drawerOpen = true;
+  private bool _isDarkMode = false;
+  private MudTheme _theme = new();
+  private ErrorBoundary? _errorBoundary;
+
+  private string UserInitial =>
+    string.IsNullOrEmpty(AuthState.User?.UserName)
+      ? "?"
+      : AuthState.User.UserName[..1].ToUpperInvariant();
+
+  private string UserName => AuthState.User?.UserName ?? "Unknown";
+  private string UserRole => AuthState.User?.Role ?? string.Empty;
+
+  protected override void OnInitialized()
+  {
+    AuthState.OnChange += StateHasChanged;
+  }
+
+  private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+  private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
+
+  private async Task LogoutAsync()
+  {
+    await AuthService.LogoutAsync();
+    Navigation.NavigateTo("/login", forceLoad: false);
+  }
+
+  public void Dispose()
+  {
+    AuthState.OnChange -= StateHasChanged;
+  }
+}

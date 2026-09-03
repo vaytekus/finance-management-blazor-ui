@@ -1,0 +1,24 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <AuthorizeView Context="authState">
+                        <Authorized>
+                            <MudAlert Severity="Severity.Error" Class="ma-4">
+                                Access Denied. You don't have permission to view this page.
+                            </MudAlert>
+                        </Authorized>
+                        <NotAuthorized>
+                            <RedirectToLogin/>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </NotAuthorized>
+                <Authorizing>
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true"/>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1"/>
+        </Found>
+    </Router>
+</CascadingAuthenticationState>

@@ -1,0 +1,155 @@
+@page "/users"
+@attribute [Authorize(Roles = "Admin")]
+@using FinanceManagement.Contracts.Users
+@using FinanceManagement.Contracts.Common
+@using FinanceManagement.Web.Services.Users
+@using FinanceManagement.Web.Shared
+@using Microsoft.AspNetCore.Authorization
+@inject IUserService UserService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudText Typo="Typo.h5" Class="mb-4">Users</MudText>
+
+<MudPaper Class="pa-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudTextField @bind-Value="_search"
+                      Placeholder="Search by name or email..."
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Variant="Variant.Outlined"
+                      Immediate="true"
+                      DebounceInterval="400"
+                      OnDebounceIntervalElapsed="LoadAsync"
+                      Class="flex-grow-1" />
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenCreateAsync">
+            Create
+        </MudButton>
+    </MudStack>
+
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary"
+                       Style="@(_loading ? "" : "visibility:hidden")" />
+
+    <MudTable Items="_users" Hover="true" Striped="true" Dense="true">
+        <HeaderContent>
+            <MudTh>Username</MudTh>
+            <MudTh>Email</MudTh>
+            <MudTh>Role</MudTh>
+            <MudTh>Created</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.UserName</MudTd>
+            <MudTd>@context.Email</MudTd>
+            <MudTd><MudChip T="string" Size="Size.Small">@context.Role</MudChip></MudTd>
+            <MudTd>@context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>
+                <MudStack Row="true" Spacing="1">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditAsync(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Size="Size.Small"
+                                   Color="Color.Error"
+                                   OnClick="@(() => DeleteAsync(context))" />
+                </MudStack>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+
+    <MudStack Row="true" Justify="Justify.Center" Class="mt-4">
+        <MudPagination Count="_totalPages"
+                       Selected="_page"
+                       SelectedChanged="OnPageChanged" />
+    </MudStack>
+</MudPaper>
+
+@code {
+    private List<UserResponse> _users = [];
+    private bool _loading = true;
+    private string? _search;
+    private int _page = 1;
+    private int _totalPages = 1;
+    private const int PageSize = 20;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+
+        try
+        {
+            var result = await UserService.GetAllAsync(_page, PageSize, _search);
+            _users = result.Items.ToList();
+            _totalPages = result.TotalPages;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task OpenCreateAsync()
+    {
+        var dialog = await DialogService.ShowAsync<UserCreateDialog>("Create User");
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+            await LoadAsync();
+    }
+
+    private async Task OpenEditAsync(UserResponse user)
+    {
+        var parameters = new DialogParameters
+        {
+            ["User"] = user
+        };
+
+        var dialog = await DialogService.ShowAsync<UserEditDialog>("Edit user", parameters);
+        var result = await dialog.Result;
+        if (result is { Canceled: false })
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(UserResponse user)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete user",
+            $"Delete {user.UserName}?",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed is not true)
+        {
+            return;
+        }
+
+        try
+        {
+            await UserService.DeleteAsync(user.Id);
+            Snackbar.Add("User deleted", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

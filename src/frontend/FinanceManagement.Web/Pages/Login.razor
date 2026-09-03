@@ -1,0 +1,133 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@layout EmptyLayout
+@using System.ComponentModel.DataAnnotations
+@using FinanceManagement.Contracts.Auth
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Login | Finance Management</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="mt-16">
+    <MudPaper Class="pa-6" Elevation="4">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="mb-4">Sign In</MudText>
+
+        <EditForm Model="@_model" OnValidSubmit="HandleLoginAsync">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_model.UserName"
+                          For="@(() => _model.UserName)"
+                          Label="Username"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-3" />
+
+            <MudTextField @bind-Value="_model.Password"
+                          For="@(() => _model.Password)"
+                          Label="Password"
+                          InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-3"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                          OnAdornmentClick="@(() => _showPassword = !_showPassword)" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Disabled="_isSubmitting">
+                @if (_isSubmitting)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    <span>Signing in...</span>
+                }
+                else
+                {
+                    <span>Sign in</span>
+                }
+            </MudButton>
+        </EditForm>
+        <MudText Align="Align.Center" Class="mt-3" Typo="Typo.body2">
+            Don't have an account?
+            <MudLink Href="/register">Register</MudLink>
+        </MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private LoginModel _model = new();
+    private bool _isSubmitting;
+    private bool _showPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo(GetSafeReturnUrl(), replace: true);
+        }
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        _isSubmitting = true;
+
+        try
+        {
+            await AuthService.LoginAsync(new LoginRequest
+            {
+                UserName = _model.UserName, Password = _model.Password
+            });
+
+            Snackbar.Add("Welcome!", Severity.Success);
+            Navigation.NavigateTo(GetSafeReturnUrl(), replace: true);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Snackbar.Add("Invalid username or password", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Login failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private string GetSafeReturnUrl()
+    {
+        if (string.IsNullOrEmpty(ReturnUrl))
+        {
+            return "/";
+        }
+
+        var decoded = Uri.UnescapeDataString(ReturnUrl);
+
+        if (decoded.StartsWith("//") || decoded.StartsWith("://"))
+        {
+            return "/";
+        }
+
+        return decoded.StartsWith("/") ? decoded : "/";
+    }
+
+    private class LoginModel()
+    {
+        [Required(ErrorMessage = "Username is required")]
+        public string UserName { get; set; } = null!;
+
+        [Required(ErrorMessage = "Password is required")]
+        public string Password { get; set; } = null!;
+    }
+}

@@ -1,0 +1,334 @@
+@page "/reports"
+@using MudBlazor.Charts
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.Operations
+@using FinanceManagement.Contracts.Reports
+@using FinanceManagement.Web.Services.Reports
+@inject IReportService ReportService
+@inject ISnackbar Snackbar
+
+<PageTitle>Reports | Finance Management</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Reports</MudText>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
+        <MudTabPanel Text="Daily">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudItem xs="12" sm="4">
+                    <MudDatePicker @bind-Date="_dailyDate"
+                                   Label="Date"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"/>
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudSelect T="Currency"
+                               @bind-Value="_currency"
+                               Label="Currency"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        @foreach (var c in Enum.GetValues<Currency>())
+                        {
+                            <MudSelectItem T="Currency" Value="@c">@c</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               Disabled="_loading"
+                               OnClick="ShowDaily">
+                        @(_loading ? "Loading..." : "Show")
+                    </MudButton>
+                </MudItem>
+            </MudStack>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Period">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                <MudItem xs="12" sm="3">
+                    <MudDatePicker @bind-Date="_periodFrom"
+                                   Label="From"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"/>
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudDatePicker @bind-Date="_periodTo"
+                                   Label="To"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense"/>
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudSelect T="Currency"
+                               @bind-Value="_currency"
+                               Label="Currency"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense">
+                        @foreach (var c in Enum.GetValues<Currency>())
+                        {
+                            <MudSelectItem T="Currency" Value="@c">@c</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Search"
+                               Disabled="_loading"
+                               OnClick="ShowPeriod">
+                        @(_loading ? "Loading..." : "Show")
+                    </MudButton>
+                </MudItem>
+            </MudStack>
+        </MudTabPanel>
+    </MudTabs>
+</MudPaper>
+
+@if (_report is not null)
+{
+    <MudGrid Spacing="3" Class="mb-4">
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.subtitle2" Color="Color.Success">Income</MudText>
+                    <MudText Typo="Typo.h4" Style="color: var(--mud-palette-success)">
+                        +@_report.TotalIncome.ToString("N2") @_report.Currency
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.subtitle2" Color="Color.Error">Expense</MudText>
+                    <MudText Typo="Typo.h4" Style="color: var(--mud-palette-error)">
+                        -@_report.TotalExpense.ToString("N2") @_report.Currency
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.subtitle2">Balance</MudText>
+                    <MudText Typo="Typo.h4"
+                             Style="@($"color: var(--mud-palette-{(_report.TotalBalance >= 0 ? "success" : "error")})")">
+                        @(_report.TotalBalance >= 0 ? "+" : "")@_report.TotalBalance.ToString("N2") @_report.Currency
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Spacing="3" Class="mb-4">
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.h6" Class="mb-2">Income vs Expense</MudText>
+                <MudChart T="double"
+                          ChartType="ChartType.Bar"
+                          ChartSeries="@BarSeries"
+                          ChartLabels="@BarLabels"
+                          Width="100%" Height="250px"
+                          ChartOptions="@(new BarChartOptions { YAxisFormat = "N0", ShowValues = true, MaxNumYAxisTicks = 5 })" />
+            </MudPaper>
+        </MudItem>
+        @if (IncomeLabels.Any())
+        {
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-2">Income by Type</MudText>
+                    <MudChart T="double"
+                              ChartType="ChartType.Pie"
+                              ChartSeries="@IncomeSeries"
+                              ChartLabels="@IncomeLabels"
+                              Width="100%" Height="250px" />
+                </MudPaper>
+            </MudItem>
+        }
+        @if (ExpenseLabels.Any())
+        {
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-2">Expense by Type</MudText>
+                    <MudChart T="double"
+                              ChartType="ChartType.Pie"
+                              ChartSeries="@ExpenseSeries"
+                              ChartLabels="@ExpenseLabels"
+                              Width="100%" Height="250px" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-2">By Type</MudText>
+        <MudTable Items="_report.ByType" Dense="true" Hover="true" Elevation="0">
+            <HeaderContent>
+                <MudTh>Type</MudTh>
+                <MudTh>Kind</MudTh>
+                <MudTh Style="text-align: right;">Count</MudTh>
+                <MudTh Style="text-align: right;">Total</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.TypeName</MudTd>
+                <MudTd>
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(context.Kind == OperationKind.Income ? Color.Success : Color.Error)"
+                             Variant="Variant.Text">
+                        @context.Kind
+                    </MudChip>
+                </MudTd>
+                <MudTd Style="text-align: right;">@context.OperationCount</MudTd>
+                <MudTd Style="text-align: right;">
+                    <span style="color: @(context.Kind == OperationKind.Income ? "var(--mud-palette-success)" : "var(--mud-palette-error)"); font-weight:500;">
+                        @(context.Kind == OperationKind.Income ? "+" : "-")@context.Total.ToString("N2") @_report.Currency
+                    </span>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>No data for this period.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-2">Operations</MudText>
+        <MudTable Items="_report.Operations" Dense="true" Hover="true" Striped="true" Elevation="0">
+            <HeaderContent>
+                <MudTh>Date</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh>Wallet</MudTh>
+                <MudTh Style="text-align: right;">Amount</MudTh>
+                <MudTh>Note</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Date.ToLocalTime().ToString("g")</MudTd>
+                <MudTd>
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(context.Kind == OperationKind.Income ? Color.Success : Color.Error)"
+                             Variant="Variant.Text">
+                        @context.TypeName
+                    </MudChip>
+                </MudTd>
+                <MudTd>@context.WalletName</MudTd>
+                <MudTd Style="text-align: right;">
+                    <span style="color: @(context.Kind == OperationKind.Income ? "var(--mud-palette-success)" : "var(--mud-palette-error)"); font-weight:500;">
+                        @(context.Kind == OperationKind.Income ? "+" : "-")@context.Amount.ToString("N2") @context.Currency
+                    </span>
+                </MudTd>
+                <MudTd>@(context.Note ?? "-")</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>No operations in this period.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private DateTime? _dailyDate = DateTime.Today;
+    private DateTime? _periodFrom = DateTime.Today.AddDays(-7);
+    private DateTime? _periodTo = DateTime.Today;
+    private Currency _currency = Currency.UAH;
+
+    private bool _loading;
+    private ReportResponse? _report;
+
+    private List<ChartSeries<double>> BarSeries => _report is null
+        ? new List<ChartSeries<double>>()
+        : new List<ChartSeries<double>>
+        {
+            new ChartSeries<double> { Name = "Income",  Data = new double[] { (double)_report.TotalIncome } },
+            new ChartSeries<double> { Name = "Expense", Data = new double[] { (double)_report.TotalExpense } }
+        };
+
+    private string[] BarLabels => [""];
+
+    private List<ChartSeries<double>> IncomeSeries => new List<ChartSeries<double>>
+    {
+        new ChartSeries<double>
+        {
+            Name = "Total",
+            Data = _report?.ByType.Where(t => t.Kind == OperationKind.Income)
+                       .Select(t => (double)t.Total).ToArray() ?? []
+        }
+    };
+
+    private string[] IncomeLabels => _report?.ByType
+        .Where(t => t.Kind == OperationKind.Income)
+        .Select(t => t.TypeName).ToArray() ?? [];
+
+    private List<ChartSeries<double>> ExpenseSeries => new List<ChartSeries<double>>
+    {
+        new ChartSeries<double>
+        {
+            Name = "Total",
+            Data = _report?.ByType.Where(t => t.Kind == OperationKind.Expense)
+                       .Select(t => (double)Math.Abs(t.Total)).ToArray() ?? []
+        }
+    };
+
+    private string[] ExpenseLabels => _report?.ByType
+        .Where(t => t.Kind == OperationKind.Expense)
+        .Select(t => t.TypeName).ToArray() ?? [];
+
+
+    private async Task ShowDaily()
+    {
+        if (_dailyDate is null)
+        {
+            Snackbar.Add("Please select a date", Severity.Warning);
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            _report = await ReportService.GetDailyAsync(_dailyDate.Value.ToUniversalTime(), _currency);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load report: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ShowPeriod()
+    {
+        if (_periodFrom is null || _periodTo is null)
+        {
+            Snackbar.Add("Please select From and To dates", Severity.Warning);
+            return;
+        }
+
+        if (_periodFrom > _periodTo)
+        {
+            Snackbar.Add("From date must be before To date", Severity.Warning);
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            _report = await ReportService.GetPeriodAsync(_periodFrom.Value.ToUniversalTime(),
+            _periodTo.Value.ToUniversalTime(),
+            _currency);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load report: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

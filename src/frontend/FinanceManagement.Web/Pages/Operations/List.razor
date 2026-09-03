@@ -1,0 +1,307 @@
+@page "/operations"
+@using FinanceManagement.Contracts.Enums
+@using FinanceManagement.Contracts.Operations
+@using FinanceManagement.Contracts.Wallets
+@using FinanceManagement.Contracts.OperationTypes
+@using FinanceManagement.Web.Services.Operations
+@using FinanceManagement.Web.Services.OperationTypes
+@using FinanceManagement.Web.Services.Wallets
+@using FinanceManagement.Web.Shared
+@inject IOperationService OperationService
+@inject IWalletService WalletService
+@inject IOperationTypeService OperationTypeService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Operations | Finance Management</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Operations</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="() => OpenFormAsync()">
+        Create</MudButton>
+</MudStack>
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="Guid?"
+                       @bind-Value="_filter.WalletId"
+                       Label="Wallet"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense">
+                @foreach (var w in _wallets)
+                {
+                    <MudSelectItem T="Guid?" Value="@w.Id">@w.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="Guid?"
+                       @bind-Value="_filter.TypeId"
+                       Label="Type"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense">
+                @foreach (var t in _types)
+                {
+                    <MudSelectItem T="Guid?" Value="@t.Id">@t.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudDatePicker @bind-Date="_filter.DateFrom"
+                           Label="Date from"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="Currency?"
+                       @bind-Value="_filter.Currency"
+                       Label="Currency"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense">
+                <MudSelectItem T="Currency?" Value="null">All</MudSelectItem> @* null = без фільтру *@
+                @foreach (var c in Enum.GetValues<Currency>())
+                {
+                    <MudSelectItem T="Currency?" Value="@((Currency?)c)">@c</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudDatePicker @bind-Date="_filter.DateTo"
+                           Label="Date to"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                <MudButton
+                    Variant="Variant.Text"
+                    OnClick="ClearFilters"
+                >Clear</MudButton>
+
+                <MudButton
+                    Variant="Variant.Filled"
+                    OnClick="ApplyFilters"
+                    Color="Color.Primary"
+                    StartIcon="@Icons.Material.Filled.FilterAlt"
+                    >Apply</MudButton>
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudTable T="OperationResponse"
+          @ref="_table"
+          ServerData="LoadServerData"
+          Dense="true"
+          Hover="true"
+          Striped="true"
+          Elevation="1"
+          RowsPerPage="20">
+    <HeaderContent>
+        <MudTh>
+            <MudTableSortLabel T="OperationResponse"
+                               SortLabel="date"
+                               InitialDirection="SortDirection.Descending">
+                Date
+            </MudTableSortLabel>
+        </MudTh>
+        <MudTh>Type</MudTh>
+        <MudTh>Wallet</MudTh>
+        <MudTh>
+            <MudTableSortLabel T="OperationResponse" SortLabel="amount">
+                Amount
+            </MudTableSortLabel>
+        </MudTh><MudTh>
+            <MudTableSortLabel T="OperationResponse" SortLabel="note">
+                Note
+            </MudTableSortLabel>
+        </MudTh>
+        <MudTh Style="width: 120px; text-align: right;">Actions</MudTh>
+    </HeaderContent>
+
+    <RowTemplate>
+        <MudTd DataLabel="Date">@context.Date.ToLocalTime().ToString("g")</MudTd>
+        <MudTd DataLabel="Type">
+            <MudChip T="string"
+                     Size="Size.Small"
+                     Color="@(context.Kind == OperationKind.Income ? Color.Success : Color.Error)"
+                     Variant="Variant.Text">
+                @context.TypeName
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Wallet">@context.WalletName</MudTd>
+        <MudTd DataLabel="Amount">
+            <span style="color: @(context.Kind == OperationKind.Income ? "var(--mud-palette-success)" : "var(--mud-palette-error)"); font-weight:500;">
+                @(context.Kind == OperationKind.Income ? "+" : "-")@context.Amount.ToString("N2") @context.Currency
+            </span>
+        </MudTd>
+        <MudTd DataLabel="Note">@(context.Note ?? "-")</MudTd>
+        <MudTd DataLabel="Actions" Style="text-align: right;">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                           Size="Size.Small"
+                           Color="Color.Primary"
+                           OnClick="() => OpenFormAsync(context.Id)"/>
+            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                           Size="Size.Small"
+                           Color="Color.Error"
+                           OnClick="() => DeleteOperation(context)"/>
+        </MudTd>
+    </RowTemplate>
+
+    <NoRecordsContent>
+        <MudText>No operations yet. Click Create to add one.</MudText>
+    </NoRecordsContent>
+
+    <LoadingContent>
+        <MudText>Loading...</MudText>
+    </LoadingContent>
+
+    <PagerContent>
+        <MudTablePager PageSizeOptions="new[] {10, 20, 50, 100}"></MudTablePager>
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<OperationResponse>? _table;
+
+    private OperationQuery _filter = new();
+    private IReadOnlyList<WalletResponse> _wallets = [];
+    private IReadOnlyList<OperationTypeResponse> _types = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var walletsTask = WalletService.GetAllAsync();
+            var typesTask = OperationTypeService.GetAllAsync();
+
+            await Task.WhenAll(walletsTask, typesTask);
+            _wallets = await walletsTask;
+            _types = await typesTask;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load filter options: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task<TableData<OperationResponse>> LoadServerData(TableState state, CancellationToken ct)
+    {
+        try
+        {
+            _filter.Page = state.Page + 1;
+            _filter.PageSize = state.PageSize;
+            _filter.SortBy = string.IsNullOrEmpty(state.SortLabel) ? "date" : state.SortLabel;
+            _filter.SortDescending = state.SortDirection switch
+            {
+                SortDirection.Descending => true,
+                SortDirection.Ascending => false,
+                _ => true,
+            };
+
+            var result = await OperationService.GetAsync(_filter, ct);
+
+            return new TableData<OperationResponse>
+            {
+                Items = result.Items, TotalItems = result.TotalCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load operations: {ex.Message}", Severity.Error);
+            return new TableData<OperationResponse> { Items = [], TotalItems = 0 };
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        if (_table is not null)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        _filter.WalletId = null;
+        _filter.TypeId = null;
+        _filter.DateFrom = null;
+        _filter.DateTo = null;
+        _filter.Currency = null;
+
+        await ApplyFilters();
+    }
+
+    private async Task OpenFormAsync(Guid? id = null)
+    {
+        // id = null → create, id = guid → edit
+        var parameters = new DialogParameters<OperationFormDialog>
+        {
+            { x => x.Id, id }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+        var dialog = await DialogService.ShowAsync<OperationFormDialog>(
+            id.HasValue ? "Edit Operation" : "Create Operation",
+            parameters,
+            options);
+
+        var result = await dialog.Result;
+
+        // якщо збереження успішне — перезавантажуємо server-side таблицю
+        if (result is { Canceled: false } && _table is not null)
+        {
+            await _table.ReloadServerData();
+        }
+    }
+
+    private async Task DeleteOperation(OperationResponse op)
+    {
+        var noteText = string.IsNullOrEmpty(op.Note) ? "" : $" - \"{op.Note}\"";
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            {
+                x => x.ContentText, $"Delete operation {op.TypeName}{noteText} on {op.Date.ToLocalTime():g} for {op.Amount:N2} {op.Currency}?"
+            },
+            {
+                x => x.ConfirmText, "Delete"
+            },
+            {
+                x => x.ConfirmColor, Color.Error
+            },
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Delete operation", parameters);
+        var result = await dialog.Result;
+
+        if (result is null || result.Canceled)
+        {
+            return;
+        }
+
+        try
+        {
+            await OperationService.DeleteAsync(op.Id);
+            Snackbar.Add("Operation deleted", Severity.Success);
+            if (_table is not null)
+            {
+                await _table.ReloadServerData();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to delete: {ex.Message}", Severity.Error);
+        }
+    }
+}

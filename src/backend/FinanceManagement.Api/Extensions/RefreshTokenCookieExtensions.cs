@@ -24,7 +24,7 @@ public static class RefreshTokenCookieExtensions
     {
         HttpOnly = true,
         Secure = secure,
-        SameSite = SameSiteMode.Lax,
+        SameSite = SameSiteMode.None, // SameSiteMode.Lax when same domain
         Path = _cookiePath,
         Expires = expiresAt,
     };

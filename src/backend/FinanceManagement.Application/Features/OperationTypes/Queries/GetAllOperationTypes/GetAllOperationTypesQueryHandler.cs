@@ -8,22 +8,15 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.OperationTypes.Queries.GetAllOperationTypes;
 
-public class GetAllOperationTypesQueryHandler : IRequestHandler<GetAllOperationTypesQuery, PagedResult<OperationTypeResponse>>
+public class GetAllOperationTypesQueryHandler(
+    IOperationTypeRepository repository,
+    ICurrentUser currentUser) : IRequestHandler<GetAllOperationTypesQuery, PagedResult<OperationTypeResponse>>
 {
-    private readonly IOperationTypeRepository _repository;
-    private readonly ICurrentUser _currentUser;
-
-    public GetAllOperationTypesQueryHandler(IOperationTypeRepository repository, ICurrentUser currentUser)
-    {
-        _repository = repository;
-        _currentUser = currentUser;
-    }
-
     public async Task<PagedResult<OperationTypeResponse>> Handle(
-        GetAllOperationTypesQuery request, 
+        GetAllOperationTypesQuery request,
         CancellationToken ct)
     {
-        var page = await _repository.GetPagedForUserAsync(_currentUser.Id, request, ct);
+        var page = await repository.GetPagedForUserAsync(currentUser.Id, request, ct);
 
         return page.Map(x => x.ToResponse());
     }

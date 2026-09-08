@@ -8,37 +8,26 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.OperationTypes.Commands.DeleteOperationType;
 
-public class DeleteOperationTypeCommandHandler : IRequestHandler<DeleteOperationTypeCommand>
+public class DeleteOperationTypeCommandHandler(
+    IOperationTypeRepository repository,
+    ICurrentUser currentUser,
+    IUnitOfWork unitOfWork) : IRequestHandler<DeleteOperationTypeCommand>
 {
-    private readonly IOperationTypeRepository _repository;
-    private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public DeleteOperationTypeCommandHandler(
-        IOperationTypeRepository repository,
-        ICurrentUser currentUser,
-        IUnitOfWork unitOfWork)
-    {
-        _repository = repository;
-        _currentUser = currentUser;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task Handle(DeleteOperationTypeCommand request, CancellationToken ct)
     {
-        var entity = await _repository.GetByIdForUserAsync(request.Id, _currentUser.Id, ct)
+        var entity = await repository.GetByIdForUserAsync(request.Id, currentUser.Id, ct)
             .OrThrowAsync(request.Id);
 
-        var isUsed = await _repository.IsUsedInOperationsAsync(entity.Id, ct);
+        var isUsed = await repository.IsUsedInOperationsAsync(entity.Id, ct);
 
         if (isUsed)
         {
             var toTypeId = await ResolveReplacementAsync(request, entity, ct);
-            await _repository.ReassignOperationsAsync(entity.Id, toTypeId, ct);
+            await repository.ReassignOperationsAsync(entity.Id, toTypeId, ct);
         }
 
-        _repository.Delete(entity);
-        await _unitOfWork.SaveChangesAsync(ct);
+        repository.Delete(entity);
+        await unitOfWork.SaveChangesAsync(ct);
     }
 
     private async Task<Guid> ResolveReplacementAsync(
@@ -48,8 +37,8 @@ public class DeleteOperationTypeCommandHandler : IRequestHandler<DeleteOperation
     {
         if (request.ReplaceWithId.HasValue)
         {
-            var replacement = await _repository.GetByIdForUserAsync(
-                request.ReplaceWithId.Value, _currentUser.Id, ct)
+            var replacement = await repository.GetByIdForUserAsync(
+                request.ReplaceWithId.Value, currentUser.Id, ct)
                 .OrThrowAsync(request.ReplaceWithId.Value);
 
             if (replacement.Kind != deletedType.Kind)
@@ -62,7 +51,7 @@ public class DeleteOperationTypeCommandHandler : IRequestHandler<DeleteOperation
 
         if (!string.IsNullOrWhiteSpace(request.ReplaceWithName))
         {
-            var exists = await _repository.ExistsByNameForUserAsync(request.ReplaceWithName, _currentUser.Id, ct: ct);
+            var exists = await repository.ExistsByNameForUserAsync(request.ReplaceWithName, currentUser.Id, ct: ct);
 
             if (exists)
             {
@@ -71,11 +60,11 @@ public class DeleteOperationTypeCommandHandler : IRequestHandler<DeleteOperation
 
             var newType = new OperationType
             {
-                Id = Guid.NewGuid(), Name = request.ReplaceWithName, Kind = deletedType.Kind, UserId = _currentUser.Id
+                Id = Guid.NewGuid(), Name = request.ReplaceWithName, Kind = deletedType.Kind, UserId = currentUser.Id
             };
 
-            _repository.Add(newType);
-            await _unitOfWork.SaveChangesAsync(ct);
+            repository.Add(newType);
+            await unitOfWork.SaveChangesAsync(ct);
             return newType.Id;
         }
 

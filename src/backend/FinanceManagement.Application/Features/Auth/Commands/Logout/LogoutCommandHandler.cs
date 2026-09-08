@@ -4,20 +4,13 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Auth.Commands.Logout;
 
-public class LogoutCommandHandler : IRequestHandler<LogoutCommand>
+public class LogoutCommandHandler(
+    IRefreshTokenRepository refreshTokenRepository,
+    IUnitOfWork unitOfWork) : IRequestHandler<LogoutCommand>
 {
-    private readonly IRefreshTokenRepository _refreshTokenRepository;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public LogoutCommandHandler(IRefreshTokenRepository refreshTokenRepository, IUnitOfWork unitOfWork)
-    {
-        _refreshTokenRepository = refreshTokenRepository;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task Handle(LogoutCommand request, CancellationToken ct)
     {
-        var stored = await _refreshTokenRepository.GetByTokenAsync(request.RefreshToken, ct);
+        var stored = await refreshTokenRepository.GetByTokenAsync(request.RefreshToken, ct);
 
         if (stored is null || stored.IsRevoked)
         {
@@ -26,6 +19,6 @@ public class LogoutCommandHandler : IRequestHandler<LogoutCommand>
 
         stored.RevokedAt = DateTime.UtcNow;
         stored.ReasonRevoked = "Logout";
-        await _unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.SaveChangesAsync(ct);
     }
 }

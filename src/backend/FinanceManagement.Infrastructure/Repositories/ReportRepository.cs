@@ -6,18 +6,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinanceManagement.Infrastructure.Repositories;
 
-public class ReportRepository : IReportRepository
+public class ReportRepository(AppDbContext db) : IReportRepository
 {
-    private readonly AppDbContext _db;
 
-    public ReportRepository(AppDbContext db)
-    {
-        _db = db;
-    }
-    
     public async Task<IReadOnlyList<ReportByTypeAggregate>> GetByTypeAsync(Guid userId, DateTime from, DateTime to, CancellationToken ct = default)
     {
-        var raw = await _db.Operations
+        var raw = await db.Operations
             .Where(o =>
                 o.Wallet!.UserId == userId
                 && o.Date >= from
@@ -49,7 +43,7 @@ public class ReportRepository : IReportRepository
     }
     public async Task<IReadOnlyList<Operation>> GetOperationsAsync(Guid userId, DateTime from, DateTime to, CancellationToken ct = default)
     {
-        return await _db.Operations
+        return await db.Operations
             .Include(o => o.Type)
             .Include(o => o.Wallet)
             .Where(o => 

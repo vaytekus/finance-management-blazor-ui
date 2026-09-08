@@ -9,14 +9,9 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace FinanceManagement.Infrastructure.Services;
 
-public class JwtTokenGenerator : IJwtTokenGenerator
+public class JwtTokenGenerator(IOptions<JwtSettings> options) : IJwtTokenGenerator
 {
-    private readonly JwtSettings _settings;
-
-    public JwtTokenGenerator(IOptions<JwtSettings> settings)
-    {
-        _settings = settings.Value;
-    }
+    private readonly JwtSettings _settings = options.Value;
     
     public (string AccessToken, DateTime ExpiresAt) GenerateToken(User user)
     {

@@ -7,24 +7,17 @@ using Microsoft.AspNetCore.Components.WebAssembly.Http;
 
 namespace FinanceManagement.Web.Services.Http;
 
-public class AuthDelegatingHandler : DelegatingHandler
+public class AuthDelegatingHandler(AuthStateService authState) : DelegatingHandler
 {
-    private readonly AuthStateService _authState;
-
-    public AuthDelegatingHandler(AuthStateService authState)
-    {
-        _authState = authState;
-    }
-
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken ct)
     {
         request.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
 
-        if (_authState.IsAuthenticated)
+        if (authState.IsAuthenticated)
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _authState.AccessToken);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authState.AccessToken);
         }
 
         var response = await base.SendAsync(request, ct);
@@ -47,7 +40,7 @@ public class AuthDelegatingHandler : DelegatingHandler
         }
 
         response.Dispose();
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _authState.AccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authState.AccessToken);
 
         return await base.SendAsync(request, ct);
     }
@@ -60,18 +53,18 @@ public class AuthDelegatingHandler : DelegatingHandler
         using var refreshResponse = await base.SendAsync(refreshRequest, ct);
         if (!refreshResponse.IsSuccessStatusCode)
         {
-            _authState.Clear();
+            authState.Clear();
             return false;
         }
 
         var body = await refreshResponse.Content.ReadFromJsonAsync<AuthResponse>(ct);
         if (body is null || string.IsNullOrEmpty(body.AccessToken) || body.User is null)
         {
-            _authState.Clear();
+            authState.Clear();
             return false;
         }
 
-        _authState.SetSession(body.AccessToken, body.ExpiresAt, body.User);
+        authState.SetSession(body.AccessToken, body.ExpiresAt, body.User);
         return true;
     }
 

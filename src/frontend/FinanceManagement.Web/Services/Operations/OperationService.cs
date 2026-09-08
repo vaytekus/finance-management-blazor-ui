@@ -7,46 +7,39 @@ using FinanceManagement.Web.Common;
 
 namespace FinanceManagement.Web.Services.Operations;
 
-public class OperationService : IOperationService
+public class OperationService(HttpClient http) : IOperationService
 {
     private const string _basePath = "api/operations";
-
-    private readonly HttpClient _http;
-
-    public OperationService(HttpClient http)
-    {
-        _http = http;
-    }
 
     public async Task<PagedResult<OperationResponse>> GetAsync(OperationQuery query, CancellationToken ct = default)
     {
         var url = BuildUrl(query);
 
-        var result = await _http.GetFromJsonAsync<PagedResult<OperationResponse>>(url, ApiJsonOptions.Default, ct);
+        var result = await http.GetFromJsonAsync<PagedResult<OperationResponse>>(url, ApiJsonOptions.Default, ct);
         return result ?? new PagedResult<OperationResponse>();
     }
 
     public async Task<OperationResponse?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await _http.GetAsync($"{_basePath}/{id}", ct);
+        var response = await http.GetAsync($"{_basePath}/{id}", ct);
         return await response.ReadOrNullAsync<OperationResponse>(ct);
     }
 
     public async Task<OperationResponse> CreateAsync(CreateOperationRequest request, CancellationToken ct = default)
     {
-        var response = await _http.PostAsJsonAsync(_basePath, request, ApiJsonOptions.Default, ct);
+        var response = await http.PostAsJsonAsync(_basePath, request, ApiJsonOptions.Default, ct);
         return await response.ReadRequiredAsync<OperationResponse>(ct);
     }
 
     public async Task UpdateAsync(Guid id, UpdateOperationRequest request, CancellationToken ct = default)
     {
-        var response = await _http.PutAsJsonAsync($"{_basePath}/{id}", request, ApiJsonOptions.Default, ct);
+        var response = await http.PutAsJsonAsync($"{_basePath}/{id}", request, ApiJsonOptions.Default, ct);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var response = await _http.DeleteAsync($"{_basePath}/{id}", ct);
+        var response = await http.DeleteAsync($"{_basePath}/{id}", ct);
         response.EnsureSuccessStatusCode();
     }
 

@@ -8,36 +8,23 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Auth.Commands.Login;
 
-public class LoginCommandHandler : IRequestHandler<LoginCommand, AuthResult>
+public class LoginCommandHandler(
+    IUserRepository userRepository,
+    IPasswordHasher passwordHasher,
+    ITokenIssuer tokenIssuer,
+    IUnitOfWork unitOfWork) : IRequestHandler<LoginCommand, AuthResult>
 {
-    private readonly IUserRepository _userRepository;
-    private readonly IPasswordHasher _passwordHasher;
-    private readonly ITokenIssuer _tokenIssuer;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public LoginCommandHandler(
-        IUserRepository userRepository,
-        IPasswordHasher passwordHasher,
-        ITokenIssuer tokenIssuer,
-        IUnitOfWork unitOfWork)
-    {
-        _userRepository = userRepository;
-        _passwordHasher = passwordHasher;
-        _tokenIssuer = tokenIssuer;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task<AuthResult> Handle(LoginCommand request, CancellationToken ct)
     {
-        var user = await _userRepository.GetByUserNameAsync(request.UserName, ct);
+        var user = await userRepository.GetByUserNameAsync(request.UserName, ct);
 
-        if (user is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
+        if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             throw new UnauthorizedException("Invalid username or password.");
         }
 
-        var tokens = _tokenIssuer.Issue(user);
-        await _unitOfWork.SaveChangesAsync(ct);
+        var tokens = tokenIssuer.Issue(user);
+        await unitOfWork.SaveChangesAsync(ct);
         return new AuthResult
         {
             Tokens = tokens,

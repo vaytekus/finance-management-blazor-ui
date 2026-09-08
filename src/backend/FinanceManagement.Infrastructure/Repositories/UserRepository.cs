@@ -10,32 +10,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinanceManagement.Infrastructure.Repositories;
 
-public class UserRepository : IUserRepository
+public class UserRepository(AppDbContext db) : IUserRepository
 {
-    private readonly AppDbContext _db;
 
-    public UserRepository(AppDbContext db)
-    {
-        _db = db;
-    }
-    
     public async Task<User?> GetByUserNameAsync(string userName, CancellationToken ct = default)
     {
-        return await _db.Users
+        return await db.Users
             .Include(u => u.Role)
             .FirstOrDefaultAsync(x => x.UserName == userName, ct);
     }
     
     public async Task<User?> GetByIdAsync(Guid userId, CancellationToken ct = default)
     {
-        return await _db.Users
+        return await db.Users
             .Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.Id == userId, ct);
     }
 
     public async Task<IReadOnlyList<User>> GetAllAsync(CancellationToken ct = default)
     {
-        return await _db.Users
+        return await db.Users
             .Include(u => u.Role)
             .AsNoTracking()
             .OrderBy(u => u.CreatedAt)
@@ -44,25 +38,25 @@ public class UserRepository : IUserRepository
     
     public async Task<bool> UserNameExistsAsync(string userName, CancellationToken ct = default)
     {
-        return await _db.Users
+        return await db.Users
             .AnyAsync(x => x.UserName == userName, ct);
     }
     
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
     {
-        return await _db.Users
+        return await db.Users
             .AnyAsync(x => x.Email == email, ct);
     }
     
     public async Task<bool> AnyOtherAdminAsync(Guid excludingUserId, CancellationToken ct = default)
     {
-        return await _db.Users
+        return await db.Users
             .AnyAsync(u => u.Id != excludingUserId && u.RoleId == UserRole.Admin, ct);
     }
     
     public async Task DeleteOperationsAsync(Guid userId, CancellationToken ct = default)
     {
-        await _db.Operations
+        await db.Operations
             .IgnoreQueryFilters()
             .Where(o => o.Wallet!.UserId == userId)
             .ExecuteDeleteAsync(ct);
@@ -70,16 +64,16 @@ public class UserRepository : IUserRepository
 
     public void Add(User user)
     {
-        _db.Users.Add(user);
+        db.Users.Add(user);
     }
     
     public void Remove(User user)
     {
-        _db.Users.Remove(user);
+        db.Users.Remove(user);
     }
     public async Task<PagedResult<User>> GetPagedAsync(GetAllUsersQuery query, CancellationToken ct = default)
     {
-        var q = _db.Users
+        var q = db.Users
             .Include(u => u.Role)
             .AsQueryable();
 

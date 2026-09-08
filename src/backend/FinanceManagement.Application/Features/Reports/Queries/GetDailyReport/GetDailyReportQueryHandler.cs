@@ -4,19 +4,12 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Reports.Queries.GetDailyReport;
 
-public class GetDailyReportQueryHandler : IRequestHandler<GetDailyReportQuery, ReportResponse>
+public class GetDailyReportQueryHandler(ReportBuilder builder) : IRequestHandler<GetDailyReportQuery, ReportResponse>
 {
-    private readonly ReportBuilder _builder;
-
-    public GetDailyReportQueryHandler(ReportBuilder builder)
-    {
-        _builder = builder;
-    }
-
     public Task<ReportResponse> Handle(GetDailyReportQuery request, CancellationToken ct)
     {
         var from = ReportBuilder.StartOfDayUtc(request.Date);
         var to = ReportBuilder.EndOfDayUtc(request.Date);
-        return _builder.BuildAsync(from, to, request.Currency, ct);
+        return builder.BuildAsync(from, to, request.Currency, ct);
     }
 }

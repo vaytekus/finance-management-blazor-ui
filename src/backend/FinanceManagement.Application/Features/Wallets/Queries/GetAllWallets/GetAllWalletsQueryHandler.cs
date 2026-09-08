@@ -8,20 +8,13 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Wallets.Queries.GetAllWallets;
 
-public class GetAllWalletsQueryHandler : IRequestHandler<GetAllWalletsQuery, PagedResult<WalletResponse>>
+public class GetAllWalletsQueryHandler(
+    IWalletRepository repository,
+    ICurrentUser currentUser) : IRequestHandler<GetAllWalletsQuery, PagedResult<WalletResponse>>
 {
-    private readonly IWalletRepository _repository;
-    private readonly ICurrentUser _currentUser;
-
-    public GetAllWalletsQueryHandler(IWalletRepository repository, ICurrentUser currentUser)
-    {
-        _repository = repository;
-        _currentUser = currentUser;
-    }
-    
     public async Task<PagedResult<WalletResponse>> Handle(GetAllWalletsQuery request, CancellationToken ct)
     {
-        var page = await _repository.GetPagedForUserAsync(_currentUser.Id, request, ct);
+        var page = await repository.GetPagedForUserAsync(currentUser.Id, request, ct);
 
         return page.Map(x => x.ToResponse());
     }

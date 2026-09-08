@@ -8,27 +8,16 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Auth.Commands.RefreshToken;
 
-public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, AuthResult>
+public class RefreshTokenCommandHandler(
+    IRefreshTokenRepository refreshTokenRepository,
+    ITokenIssuer tokenIssuer,
+    IUnitOfWork unitOfWork) : IRequestHandler<RefreshTokenCommand, AuthResult>
 {
     private const string _invalidRefreshTokenMessage = "Invalid refresh token.";
 
-    private readonly IRefreshTokenRepository _refreshTokenRepository;
-    private readonly ITokenIssuer _tokenIssuer;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public RefreshTokenCommandHandler(
-        IRefreshTokenRepository refreshTokenRepository,
-        ITokenIssuer tokenIssuer,
-        IUnitOfWork unitOfWork)
-    {
-        _refreshTokenRepository = refreshTokenRepository;
-        _tokenIssuer = tokenIssuer;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task<AuthResult> Handle(RefreshTokenCommand request, CancellationToken ct)
     {
-        var stored = await _refreshTokenRepository.GetByTokenAsync(request.RefreshToken, ct);
+        var stored = await refreshTokenRepository.GetByTokenAsync(request.RefreshToken, ct);
 
         if (stored is null)
         {
@@ -37,9 +26,9 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
 
         if (stored.IsRevoked)
         {
-            var activeTokens = await _refreshTokenRepository.GetActiveByUserIdAsync(stored.UserId, ct);
-            _refreshTokenRepository.RevokeAll(activeTokens, "Reuse detected");
-            await _unitOfWork.SaveChangesAsync(ct);
+            var activeTokens = await refreshTokenRepository.GetActiveByUserIdAsync(stored.UserId, ct);
+            refreshTokenRepository.RevokeAll(activeTokens, "Reuse detected");
+            await unitOfWork.SaveChangesAsync(ct);
             throw new UnauthorizedException(_invalidRefreshTokenMessage);
         }
 
@@ -48,13 +37,13 @@ public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, A
             throw new UnauthorizedException(_invalidRefreshTokenMessage);
         }
 
-        var newTokens = _tokenIssuer.Issue(stored.User);
+        var newTokens = tokenIssuer.Issue(stored.User);
 
         stored.RevokedAt = DateTime.UtcNow;
         stored.ReasonRevoked = "Rotated";
         stored.ReplacedByToken = newTokens.RefreshToken;
 
-        await _unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.SaveChangesAsync(ct);
         return new AuthResult
         {
             Tokens = newTokens,

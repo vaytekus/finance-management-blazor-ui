@@ -5,24 +5,15 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.OperationTypes.Queries.GetOperationTypeOperationsCount;
 
-public class GetOperationTypeOperationsCountQueryHandler : IRequestHandler<GetOperationTypeOperationsCountQuery, int>
+public class GetOperationTypeOperationsCountQueryHandler(
+    IOperationTypeRepository operationTypeRepository,
+    ICurrentUser currentUser) : IRequestHandler<GetOperationTypeOperationsCountQuery, int>
 {
-    private readonly IOperationTypeRepository _operationTypeRepository;
-    private readonly ICurrentUser _currentUser;
-
-    public GetOperationTypeOperationsCountQueryHandler(
-        IOperationTypeRepository operationTypeRepository,
-        ICurrentUser currentUser)
-    {
-        _operationTypeRepository = operationTypeRepository;
-        _currentUser = currentUser;
-    }
-
     public async Task<int> Handle(GetOperationTypeOperationsCountQuery request, CancellationToken ct)
     {
-        await _operationTypeRepository.GetByIdForUserAsync(request.Id, _currentUser.Id, ct)
+        await operationTypeRepository.GetByIdForUserAsync(request.Id, currentUser.Id, ct)
             .OrThrowAsync(request.Id);
 
-        return await _operationTypeRepository.CountOperationsAsync(request.Id, ct);
+        return await operationTypeRepository.CountOperationsAsync(request.Id, ct);
     }
 }

@@ -6,28 +6,17 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Operations.Commands.DeleteOperation;
 
-public class DeleteOperationCommandHandler : IRequestHandler<DeleteOperationCommand>
+public class DeleteOperationCommandHandler(
+    IOperationRepository repository,
+    ICurrentUser currentUser,
+    IUnitOfWork unitOfWork) : IRequestHandler<DeleteOperationCommand>
 {
-    private readonly IOperationRepository _repository;
-    private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public DeleteOperationCommandHandler(
-        IOperationRepository repository,
-        ICurrentUser currentUser,
-        IUnitOfWork unitOfWork)
-    {
-        _repository = repository;
-        _currentUser = currentUser;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task Handle(DeleteOperationCommand request, CancellationToken ct)
     {
-        var entity = await _repository.GetByIdForUserAsync(request.Id, _currentUser.Id, ct)
+        var entity = await repository.GetByIdForUserAsync(request.Id, currentUser.Id, ct)
             .OrThrowAsync(request.Id);
 
-        _repository.SoftDelete(entity);
-        await _unitOfWork.SaveChangesAsync(ct);
+        repository.SoftDelete(entity);
+        await unitOfWork.SaveChangesAsync(ct);
     }
 }

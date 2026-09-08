@@ -9,25 +9,14 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.OperationTypes.Commands.CreateOperationType;
 
-public class CreateOperationTypeCommandHandler : IRequestHandler<CreateOperationTypeCommand, OperationTypeResponse>
+public class CreateOperationTypeCommandHandler(
+    IOperationTypeRepository repository,
+    ICurrentUser currentUser,
+    IUnitOfWork unitOfWork) : IRequestHandler<CreateOperationTypeCommand, OperationTypeResponse>
 {
-    private readonly IOperationTypeRepository _repository;
-    private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public CreateOperationTypeCommandHandler(
-        IOperationTypeRepository repository,
-        ICurrentUser currentUser,
-        IUnitOfWork unitOfWork)
-    {
-        _repository = repository;
-        _currentUser = currentUser;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task<OperationTypeResponse> Handle(CreateOperationTypeCommand request, CancellationToken ct)
     {
-        await _repository.ExistsByNameForUserAsync(request.Name, _currentUser.Id, excludeId: null, ct)
+        await repository.ExistsByNameForUserAsync(request.Name, currentUser.Id, excludeId: null, ct)
             .ThrowIfExistsAsync($"Operation type with name '{request.Name}' already exists.");
 
         var entity = new OperationType
@@ -36,11 +25,11 @@ public class CreateOperationTypeCommandHandler : IRequestHandler<CreateOperation
             Name = request.Name,
             Description = request.Description,
             Kind = request.Kind,
-            UserId = _currentUser.Id,
+            UserId = currentUser.Id,
         };
 
-        _repository.Add(entity);
-        await _unitOfWork.SaveChangesAsync(ct);
+        repository.Add(entity);
+        await unitOfWork.SaveChangesAsync(ct);
         return entity.ToResponse();
     }
 }

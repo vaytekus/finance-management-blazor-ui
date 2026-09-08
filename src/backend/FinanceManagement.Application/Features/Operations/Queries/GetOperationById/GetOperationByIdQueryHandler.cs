@@ -7,20 +7,13 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Operations.Queries.GetOperationById;
 
-public class GetOperationByIdQueryHandler : IRequestHandler<GetOperationByIdQuery, OperationResponse>
+public class GetOperationByIdQueryHandler(
+    IOperationRepository repository,
+    ICurrentUser currentUser) : IRequestHandler<GetOperationByIdQuery, OperationResponse>
 {
-    private readonly IOperationRepository _repository;
-    private readonly ICurrentUser _currentUser;
-
-    public GetOperationByIdQueryHandler(IOperationRepository repository, ICurrentUser currentUser)
-    {
-        _repository = repository;
-        _currentUser = currentUser;
-    }
-
     public async Task<OperationResponse> Handle(GetOperationByIdQuery request, CancellationToken ct)
     {
-        var entity = await _repository.GetByIdForUserAsync(request.Id, _currentUser.Id, ct)
+        var entity = await repository.GetByIdForUserAsync(request.Id, currentUser.Id, ct)
             .OrThrowAsync(request.Id);
 
         return entity.ToResponse();

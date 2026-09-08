@@ -10,31 +10,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinanceManagement.Infrastructure.Repositories;
 
-public class WalletRepository : IWalletRepository
+public class WalletRepository(AppDbContext db) : IWalletRepository
 {
-    private readonly AppDbContext _db;
 
-    public WalletRepository(AppDbContext db)
-    {
-        _db = db;
-    }
-    
     public async Task<IReadOnlyList<Wallet>> GetAllForUserAsync(Guid userId, CancellationToken ct = default)
     {
-        return await _db.Wallets.Where(w => w.UserId == userId)
+        return await db.Wallets.Where(w => w.UserId == userId)
             .OrderBy(w => w.CreatedAt)
             .ToListAsync(ct);
     }
     
     public Task<Wallet?> GetByIdForUserAsync(Guid id, Guid userId, CancellationToken ct = default)
     {
-        return _db.Wallets
+        return db.Wallets
             .FirstOrDefaultAsync(w => w.Id == id && w.UserId == userId, ct);
     }
     
     public async Task<bool> ExistsByNameForUserAsync(string name, Guid userId, Guid? excludeId, CancellationToken ct = default)
     {
-        return await _db.Wallets
+        return await db.Wallets
             .AnyAsync(w => 
                 w.Name == name 
                 && w.UserId == userId
@@ -43,30 +37,30 @@ public class WalletRepository : IWalletRepository
 
     public Task<bool> HasOperationsAsync(Guid walletId, CancellationToken ct = default)
     {
-        return _db.Operations.AnyAsync(w => w.WalletId == walletId, ct);
+        return db.Operations.AnyAsync(w => w.WalletId == walletId, ct);
     }
 
     public void Add(Wallet wallet)
     {
-        _db.Wallets.Add(wallet);
+        db.Wallets.Add(wallet);
     }
     
     public void Update(Wallet wallet)
     {
-        _db.Wallets.Update(wallet);
+        db.Wallets.Update(wallet);
     }
     
     public void SoftDelete(Wallet wallet)
     {
         wallet.MarkDeleted();
-        _db.Wallets.Update(wallet);
+        db.Wallets.Update(wallet);
     }
     public async Task<PagedResult<Wallet>> GetPagedForUserAsync(
         Guid userId, 
         GetAllWalletsQuery query, 
         CancellationToken ct = default)
     {
-        var q = _db.Wallets.Where(w => w.UserId == userId);
+        var q = db.Wallets.Where(w => w.UserId == userId);
 
         if (query.Currency.HasValue)
         {

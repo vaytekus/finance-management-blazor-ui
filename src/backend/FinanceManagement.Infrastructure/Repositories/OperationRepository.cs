@@ -10,18 +10,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinanceManagement.Infrastructure.Repositories;
 
-public class OperationRepository : IOperationRepository
+public class OperationRepository(AppDbContext db) : IOperationRepository
 {
-    private readonly AppDbContext _db;
 
-    public OperationRepository(AppDbContext db)
-    {
-        _db = db;
-    }
-    
     public async Task<IReadOnlyList<Operation>> GetAllForUserAsync(Guid userId, CancellationToken ct = default) 
     {
-        return await _db.Operations
+        return await db.Operations
             .Include(x => x.Type)
             .Include(x => x.Wallet)
             .Where(x => x.Wallet!.UserId == userId)
@@ -32,7 +26,7 @@ public class OperationRepository : IOperationRepository
     
     public async Task<Operation?> GetByIdForUserAsync(Guid id, Guid userId, CancellationToken ct = default) 
     {
-        return await _db.Operations
+        return await db.Operations
             .Include(x => x.Type)
             .Include(x => x.Wallet)
             .FirstOrDefaultAsync(x => x.Id == id && x.Wallet!.UserId == userId, ct);
@@ -40,25 +34,25 @@ public class OperationRepository : IOperationRepository
     
     public void Add(Operation entity)
     {
-        _db.Operations.Add(entity);
+        db.Operations.Add(entity);
     }
     
     public void Update(Operation entity)
     {
-        _db.Operations.Update(entity);
+        db.Operations.Update(entity);
     }
     
     public void SoftDelete(Operation entity)
     {
         entity.MarkDeleted();
-        _db.Operations.Update(entity);
+        db.Operations.Update(entity);
     }
     public async Task<PagedResult<Operation>> GetPagedForUserAsync(
         Guid userId, 
         GetAllOperationsQuery query, 
         CancellationToken ct = default)
     {
-        var q = _db.Operations
+        var q = db.Operations
             .Include(x => x.Type)
             .Include(x => x.Wallet)
             .Where(x => x.Wallet!.UserId == userId);

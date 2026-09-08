@@ -10,40 +10,23 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Operations.Commands.CreateOperation;
 
-public class CreateOperationCommandHandler : IRequestHandler<CreateOperationCommand, OperationResponse>
+public class CreateOperationCommandHandler(
+    IOperationRepository repository,
+    IOperationTypeRepository typeRepository,
+    IWalletRepository walletRepository,
+    ICurrencyConverter currencyConverter,
+    ICurrentUser currentUser,
+    IUnitOfWork unitOfWork) : IRequestHandler<CreateOperationCommand, OperationResponse>
 {
-    private readonly IOperationRepository _repository;
-    private readonly IOperationTypeRepository _typeRepository;
-    private readonly IWalletRepository _walletRepository;
-    private readonly ICurrencyConverter _currencyConverter;
-    private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public CreateOperationCommandHandler(
-        IOperationRepository repository,
-        IOperationTypeRepository typeRepository,
-        IWalletRepository walletRepository,
-        ICurrencyConverter currencyConverter,
-        ICurrentUser currentUser,
-        IUnitOfWork unitOfWork)
-    {
-        _repository = repository;
-        _typeRepository = typeRepository;
-        _walletRepository = walletRepository;
-        _currencyConverter = currencyConverter;
-        _currentUser = currentUser;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task<OperationResponse> Handle(CreateOperationCommand request, CancellationToken ct)
     {
-        var type = await _typeRepository.GetByIdForUserAsync(request.TypeId, _currentUser.Id, ct)
+        var type = await typeRepository.GetByIdForUserAsync(request.TypeId, currentUser.Id, ct)
             .OrThrowAsync(request.TypeId);
-        var wallet = await _walletRepository.GetByIdForUserAsync(request.WalletId, _currentUser.Id, ct)
+        var wallet = await walletRepository.GetByIdForUserAsync(request.WalletId, currentUser.Id, ct)
             .OrThrowAsync(request.WalletId);
 
         var (amount, note) = await OperationAmountResolver.ResolveAsync(
-            _currencyConverter,
+            currencyConverter,
             request.Amount,
             request.Currency,
             request.Note,
@@ -61,8 +44,8 @@ public class CreateOperationCommandHandler : IRequestHandler<CreateOperationComm
             Note = note
         };
 
-        _repository.Add(entity);
-        await _unitOfWork.SaveChangesAsync(ct);
+        repository.Add(entity);
+        await unitOfWork.SaveChangesAsync(ct);
 
         entity.Type = type;
         entity.Wallet = wallet;

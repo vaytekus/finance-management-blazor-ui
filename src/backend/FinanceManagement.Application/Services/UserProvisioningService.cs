@@ -6,20 +6,11 @@ using FinanceManagement.Domain.Enums;
 
 namespace FinanceManagement.Application.Services;
 
-public class UserProvisioningService : IUserProvisioningService
+public class UserProvisioningService(
+    IWalletRepository walletRepository,
+    IOperationTypeRepository operationTypeRepository) : IUserProvisioningService
 {
     private const string _defaultWalletName = "Cash";
-
-    private readonly IWalletRepository _walletRepository;
-    private readonly IOperationTypeRepository _operationTypeRepository;
-
-    public UserProvisioningService(
-        IWalletRepository walletRepository,
-        IOperationTypeRepository operationTypeRepository)
-    {
-        _walletRepository = walletRepository;
-        _operationTypeRepository = operationTypeRepository;
-    }
 
     public void AddDefaultsFor(User user)
     {
@@ -28,11 +19,11 @@ public class UserProvisioningService : IUserProvisioningService
             Name = _defaultWalletName, Currency = Currency.UAH, UserId = user.Id, CreatedAt = DateTime.UtcNow,
         };
 
-        _walletRepository.Add(wallet);
+        walletRepository.Add(wallet);
 
         foreach (var template in DefaultOperationTypes.All)
         {
-            _operationTypeRepository.Add(template.ToEntity(user.Id));
+            operationTypeRepository.Add(template.ToEntity(user.Id));
         }
     }
 }

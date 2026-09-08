@@ -8,38 +8,27 @@ using MediatR;
 
 namespace FinanceManagement.Application.Features.Users.Commands.DeleteUser;
 
-public class DeleteUserCommandHandler : IRequestHandler<DeleteUserCommand>
+public class DeleteUserCommandHandler(
+    IUserRepository repository,
+    ICurrentUser currentUser,
+    IUnitOfWork unitOfWork) : IRequestHandler<DeleteUserCommand>
 {
-    private readonly IUserRepository _repository;
-    private readonly ICurrentUser _currentUser;
-    private readonly IUnitOfWork _unitOfWork;
-
-    public DeleteUserCommandHandler(
-        IUserRepository repository,
-        ICurrentUser currentUser,
-        IUnitOfWork unitOfWork)
-    {
-        _repository = repository;
-        _currentUser = currentUser;
-        _unitOfWork = unitOfWork;
-    }
-
     public async Task Handle(DeleteUserCommand request, CancellationToken ct)
     {
-        if (request.Id == _currentUser.Id)
+        if (request.Id == currentUser.Id)
         {
             throw new ValidationException("You cannot delete your own account.");
         }
 
-        var user = await _repository.GetByIdAsync(request.Id, ct).OrThrowAsync(request.Id);
+        var user = await repository.GetByIdAsync(request.Id, ct).OrThrowAsync(request.Id);
 
-        if (user.RoleId == UserRole.Admin && !await _repository.AnyOtherAdminAsync(user.Id, ct))
+        if (user.RoleId == UserRole.Admin && !await repository.AnyOtherAdminAsync(user.Id, ct))
         {
             throw new ValidationException("Cannot delete the last admin.");
         }
 
-        await _repository.DeleteOperationsAsync(user.Id, ct);
-        _repository.Remove(user);
-        await _unitOfWork.SaveChangesAsync(ct);
+        await repository.DeleteOperationsAsync(user.Id, ct);
+        repository.Remove(user);
+        await unitOfWork.SaveChangesAsync(ct);
     }
 }

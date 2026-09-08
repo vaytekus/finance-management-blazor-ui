@@ -9,18 +9,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinanceManagement.Infrastructure.Repositories;
 
-public class OperationTypeRepository : IOperationTypeRepository
+public class OperationTypeRepository(AppDbContext db) : IOperationTypeRepository
 {
-    private readonly AppDbContext _db;
 
-    public OperationTypeRepository(AppDbContext db)
-    {
-        _db = db;
-    }
-    
     public async Task<IReadOnlyList<OperationType>> GetAllForUserAsync(Guid userId, CancellationToken ct = default) 
     {
-        return await _db.OperationTypes
+        return await db.OperationTypes
             .Where(x => x.UserId == userId)
             .AsNoTracking()
             .ToListAsync(ct);
@@ -28,13 +22,13 @@ public class OperationTypeRepository : IOperationTypeRepository
     
     public Task<OperationType?> GetByIdForUserAsync(Guid id, Guid userId, CancellationToken ct = default) 
     {
-        return _db.OperationTypes
+        return db.OperationTypes
             .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
     }
     
     public Task<bool> ExistsByNameForUserAsync(string name, Guid userId, Guid? excludeId = null, CancellationToken ct = default)
     {
-        return _db.OperationTypes
+        return db.OperationTypes
             .AnyAsync(x => 
                 x.Name == name
                 && x.UserId == userId
@@ -43,42 +37,42 @@ public class OperationTypeRepository : IOperationTypeRepository
     
     public Task<bool> IsUsedInOperationsAsync(Guid typeId, CancellationToken ct = default) 
     {
-        return _db.Operations
+        return db.Operations
             .AnyAsync(x => x.TypeId == typeId, ct);
     }
     public async Task<int> CountOperationsAsync(Guid typeId, CancellationToken ct = default)
     {
-        return await _db.Operations
+        return await db.Operations
             .CountAsync(o => o.TypeId == typeId);
     }
 
     public async Task ReassignOperationsAsync(Guid fromTypeId, Guid toTypeId, CancellationToken ct = default)
     {
-        await _db.Operations
+        await db.Operations
             .Where(o => o.TypeId == fromTypeId)
             .ExecuteUpdateAsync(s => s.SetProperty(o => o.TypeId, toTypeId), ct);
     }
 
     public void Add(OperationType entity) 
     {
-        _db.OperationTypes.Add(entity);
+        db.OperationTypes.Add(entity);
     }
     
     public void Update(OperationType entity) 
     {
-        _db.OperationTypes.Update(entity);
+        db.OperationTypes.Update(entity);
     }
     
     public void Delete(OperationType entity) 
     {
-        _db.OperationTypes.Remove(entity);
+        db.OperationTypes.Remove(entity);
     }
     public async Task<PagedResult<OperationType>> GetPagedForUserAsync(
         Guid userId, 
         GetAllOperationTypesQuery query, 
         CancellationToken ct = default)
     {
-        var q = _db.OperationTypes.Where(x => x.UserId == userId);
+        var q = db.OperationTypes.Where(x => x.UserId == userId);
 
         if (query.Kind.HasValue)
         {

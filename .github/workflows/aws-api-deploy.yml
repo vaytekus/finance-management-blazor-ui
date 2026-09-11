@@ -1,0 +1,36 @@
+name: Deploy API to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Publish
+        run: dotnet publish src/backend/FinanceManagement.Api/FinanceManagement.Api.csproj -c Release -o publish
+
+      - name: Zip artifact
+        run: cd publish && zip -r ../api.zip .
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ${{ secrets.AWS_REGION }}
+          application_name: finance-management-api
+          environment_name: Finance-management-api-env
+          version_label: ${{ github.sha }}
+          deployment_package: api.zip
